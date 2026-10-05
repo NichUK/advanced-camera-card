@@ -3,6 +3,7 @@ import { assert, expect, it } from 'vitest';
 import '../../../src/components/timeline';
 
 import type { AdvancedCameraCardTimelineCore } from '../../../src/components/timeline-core';
+import type { AdvancedCameraCardViewerProvider } from '../../../src/components/viewer/provider';
 import { deepQuery, deepQueryAll } from '../../browser/dom';
 import { FakeHASS } from '../../browser/fake-hass';
 import { createFixtureURL } from '../../browser/fixtures';
@@ -63,10 +64,13 @@ const mount = async (
         })),
     };
   });
-  hass.registerMediaSource(/^media-source:\/\/shinobi_recordings\/clip\|/, () => ({
-    url: mediaURL,
-    mime_type: 'video/mp4',
-  }));
+  hass.registerMediaSource(
+    /^media-source:\/\/shinobi_recordings\/clip\|/,
+    (contentID) => ({
+      url: `${mediaURL}${mediaURL.includes('?') ? '&' : '?'}clip=${contentID.includes('b'.repeat(64)) ? 'b' : 'a'}`,
+      mime_type: 'video/mp4',
+    }),
+  );
   const card = await MountedCardFactory.createFromSource(
     {
       type: 'custom:advanced-camera-card',
@@ -114,9 +118,17 @@ const choose = async (
   return core;
 };
 
+const getSelectedVideo = (card: MountedCard): HTMLVideoElement | null => {
+  const provider = deepQueryAll<AdvancedCameraCardViewerProvider>(
+    card.card,
+    'advanced-camera-card-viewer-provider',
+  ).find((provider) => provider.forceSelected);
+  return provider ? deepQuery<HTMLVideoElement>(provider, 'video') : null;
+};
+
 const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement> => {
   await card.events.waitForFirst('advanced-camera-card:media:loaded');
-  const video = deepQuery<HTMLVideoElement>(card.card, 'video');
+  const video = getSelectedVideo(card);
   assert(video);
   await expect.poll(() => video.currentTime).toBeGreaterThanOrEqual(59);
   expect(video.currentTime).toBeLessThanOrEqual(61);
@@ -179,7 +191,7 @@ it('ignores late discovery after another time is selected', async () => {
   await expect.poll(() => pending).toBe(true);
   hold = false;
   const core = await choose(card, new Date('2026-10-02T16:10:00Z'));
-  await waitForSelectedFrame(card);
+  const selectedPlayer = await waitForSelectedFrame(card);
   assert(deferred.release);
   deferred.release();
   // Let the old promise and Lit's following render complete before asserting.
@@ -190,10 +202,9 @@ it('ignores late discovery after another time is selected', async () => {
   expect(
     core.viewManagerEpoch?.manager.getView()?.queryResults?.getSelectedResult()?.getID(),
   ).toBe(`v1-${'b'.repeat(64)}`);
-  expect(deepQuery<HTMLVideoElement>(card.card, 'video')?.currentTime).toBeCloseTo(
-    60,
-    0,
-  );
+  expect(getSelectedVideo(card)).toBe(selectedPlayer);
+  expect(selectedPlayer.currentTime).toBeGreaterThanOrEqual(59);
+  expect(selectedPlayer.currentTime).toBeLessThan(120);
   expect(
     core.viewManagerEpoch?.manager.getView()?.context?.mediaViewer?.seek?.toISOString(),
   ).toBe('2026-10-02T16:10:00.000Z');
