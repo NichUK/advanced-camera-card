@@ -39,7 +39,7 @@ const findTestFiles = (directory: string): string[] => {
       entry.name.endsWith('.test.ts') &&
       !entry.name.endsWith(BROWSER_TEST_SUFFIX)
     ) {
-      files.push(path);
+      files.push(path.replaceAll('\\', '/'));
     }
   }
   return files;

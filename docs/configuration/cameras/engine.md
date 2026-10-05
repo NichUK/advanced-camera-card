@@ -2,6 +2,20 @@
 
 ## Overview
 
+The `shinobi` preview engine uses the original `shinobi_recordings` Home Assistant
+adapter. Set `camera_entity` to its archive camera, and either select `engine:
+shinobi` or use automatic detection. The legacy `shinobi` integration is not
+auto-detected. No Shinobi address or API key belongs in the card configuration.
+This first engine checkpoint registers archive identity only; history support is
+added in the following preview stories. Live view, PTZ, events, snapshots,
+favorites and download are not advertised.
+
+```yaml
+cameras:
+  - camera_entity: camera.garden_recordings
+    engine: shinobi
+```
+
 A "Camera Engine" defines what "type" of camera is being configured (e.g. `frigate`), each engine offers different capabilities:
 
 | Engine      | Live               | Supports clips           | Supports Snapshots       | Supports Recordings      | Supports Timeline        | Supports PTZ out of the box | Supports manually configured PTZ | Favorite events          | Favorite recordings      | Detect new events        | Detect new snapshots     | Detect new clips         | May require [proxying](./README.md?id=proxy) | Thumbnails               |

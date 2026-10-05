@@ -127,6 +127,7 @@ const ENGINES = [
   'generic',
   'motioneye',
   'reolink',
+  'shinobi',
   'tplink',
 ] as const;
 
