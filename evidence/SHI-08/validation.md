@@ -1,0 +1,13 @@
+# Original-file continuation
+
+Date: 2026-10-05. Implementation checkpoint; ordered review and real-device gates remain open.
+
+The selected Shinobi file's natural ended event advances once to a file covering the same UTC boundary. Overlaps seek at that boundary rather than resetting chronology. Existing viewer media resolution and playback manage the new original file; no concatenation, transcoding or recording changes are introduced. A positive gap stops playback and offers a native Continue at next recording button. Verified exhaustion and unavailable metadata are distinct states. Missing or deleted candidate metadata fails visibly instead of silently advancing.
+
+Continuation revalidates the candidate rather than trusting a stale viewport snapshot. Discovery scans forward in windows of at most 26 hours, within one ten-second overall deadline, only until the next recording or present time. Unknown/failed empty responses remain errors; end-of-history requires verified successful metadata. Pause requests, manual selection, camera changes and disposal invalidate the pending attempt. A canceled metadata response cannot commit a new player selection. A Cancel continuation button is available while waiting.
+
+Validation: 7,477 unit tests in 440 files pass with required 100% statements, branches, functions and lines. TypeScript, lint, production build and scoped formatting pass. The full browser run passes 205 tests in 29 files; an additional targeted retention-deletion regression passes, for six standalone continuation cases. Those cases include twenty natural adjacent handoffs, a 36-second gap with explicit continuation, pause/manual seek/disposal races and missing next metadata. The latest dedicated twenty-handoff run measured p95 215.1 ms from the native ended event to the next selected playing decoded frame. Raw observations are in handoff-timings.json.
+
+Fixtures are synthetic one-second blue H.264 MP4s, 3840x2160/5 fps without audio. Clip metadata matches the real file duration; playback ends naturally without forcing currentTime. Environment is the same Windows 11/Intel i7-1265U, Node 24.14.0, Yarn 4.9.1, Vitest 4.1.10, Playwright 1.62.0 and Chromium 151.0.7922.34 used in SHI-05. Metadata/resolution are synthetic; MP4 transport and decoding are real. This is not original Clear HEVC or physical iPhone acceptance. Production HA, NVR, retention and detection remain unchanged.
+
+Reproduce: set VITEST_BROWSER=chromium and run corepack yarn@4.9.1 test:browser tests/camera-manager/shinobi/continuation.browser.test.ts with the JSON reporter. The natural-handoff test stores handoffPerformance metadata. Fixture generation and checksum are in tests/browser/fixtures/README.md.

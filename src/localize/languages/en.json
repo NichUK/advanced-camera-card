@@ -969,7 +969,13 @@
     "where": "Where"
   },
   "media_viewer": {
-    "unseekable": "Seek time not found in media"
+    "unseekable": "Seek time not found in media",
+    "continuation_loading": "Finding the next recording\u2026",
+    "continuation_gap": "Recording gap. Playback stopped.",
+    "continuation_end": "End of available recording history.",
+    "continuation_error": "Next recording unavailable. Choose a time to retry.",
+    "continue_next": "Continue at next recording",
+    "cancel_continuation": "Cancel continuation"
   },
   "thumbnail": {
     "camera": "Camera",

@@ -18,6 +18,7 @@ import {
   hideMediaControlsTemporarily,
   MEDIA_LOAD_CONTROLS_HIDE_SECONDS,
 } from '../utils/controls';
+import { fireAdvancedCameraCardEvent } from '../utils/fire-advanced-camera-card-event';
 import {
   createMediaLoadedInfo,
   dispatchMediaPauseEvent,
@@ -85,7 +86,14 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
         }}"
         @volumechange=${() => dispatchMediaVolumeChangeEvent(this)}
         @play=${() => dispatchMediaPlayEvent(this)}
-        @pause=${() => dispatchMediaPauseEvent(this)}
+        @pause=${(event: Event) => {
+          if (event.target instanceof HTMLVideoElement && !event.target.ended) {
+            fireAdvancedCameraCardEvent(this, 'media:pause-request');
+          }
+          dispatchMediaPauseEvent(this);
+        }}
+        @ended=${() => fireAdvancedCameraCardEvent(this, 'media:ended')}
+        @seeking=${() => fireAdvancedCameraCardEvent(this, 'media:seek-request')}
       >
         <source src="${ifDefined(this.url)}" type="video/mp4" />
       </video>

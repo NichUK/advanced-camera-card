@@ -12,12 +12,14 @@ import { keyed } from 'lit/directives/keyed.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import type { CameraManager } from '../../camera-manager/manager.js';
+import { MergeContextViewModifier } from '../../card-controller/view/modifiers/merge-context';
 import { RemoveContextPropertyViewModifier } from '../../card-controller/view/modifiers/remove-context-property.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
 import { resolveAutoHideState } from '../../components-lib/auto-hide.js';
 import { MediaActionsController } from '../../components-lib/media-actions-controller.js';
 import { MediaHeightController } from '../../components-lib/media-height-controller.js';
 import { MediaLoadedInfoSinkController } from '../../components-lib/media-loaded-info-sink-controller.js';
+import { RecordingContinuation } from '../../components-lib/viewer/recording-continuation';
 import { getViewerMediaIndex } from '../../components-lib/viewer/selection';
 import type { TransitionEffect } from '../../config/schema/common/transition-effect.js';
 import { configDefaults, type CardWideConfig } from '../../config/schema/types.js';
@@ -32,9 +34,12 @@ import viewerCarouselStyle from '../../scss/viewer-carousel.scss?inline';
 import { stopEventFromActivatingCardWideActions } from '../../utils/action.js';
 import { contentsChanged } from '../../utils/basic.js';
 import type { CarouselSelected } from '../../utils/embla/carousel-controller.js';
+import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index';
 import { getTextDirection } from '../../utils/text-direction.js';
 import { ViewItemClassifier } from '../../view/item-classifier.js';
 import type { ViewMedia } from '../../view/item.js';
+import { QueryResults } from '../../view/query-results';
+import { UnifiedQuery } from '../../view/unified-query';
 
 import '../carousel';
 import '../next-prev-control.js';
@@ -97,6 +102,7 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
   private _selected: number | null = null;
 
   private _media: ViewMedia[] | null = null;
+  private _continuation = new RecordingContinuation(() => this.requestUpdate());
   private _mediaActionsController = new MediaActionsController();
   private _mediaHeightController = new MediaHeightController(this, '.embla__slide');
   private _refCarousel: Ref<HTMLElement> = createRef();
@@ -122,6 +128,7 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
   }
 
   public disconnectedCallback(): void {
+    this._continuation.cancel();
     this._mediaActionsController.destroy();
     this._mediaHeightController.destroy();
     super.disconnectedCallback();
@@ -271,6 +278,16 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
       const newSelectedItem = newView?.queryResults?.getSelectedResult(
         this.viewFilterCameraID,
       );
+      if (
+        oldSelectedItem !== newSelectedItem ||
+        oldView?.camera !== newView?.camera ||
+        (newView?.context?.loading?.query !== undefined &&
+          oldView?.context?.loading?.query !== newView.context.loading.query) ||
+        oldView?.context?.mediaViewer?.seek?.getTime() !==
+          newView?.context?.mediaViewer?.seek?.getTime()
+      ) {
+        this._continuation.cancel();
+      }
 
       // _selected is an index, it needs to be updated if either the selected
       // item or the media changes.
@@ -370,7 +387,97 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
         >
         </advanced-camera-card-icon>
       </div>
+      ${this._renderContinuation()}
     `;
+  }
+
+  private _renderContinuation(): TemplateResult | null {
+    const state = this._continuation.getState();
+    if (!state) {
+      return null;
+    }
+    return html`<div class="recording-continuation" role="status" aria-live="polite">
+      ${localize(`media_viewer.continuation_${state.state}`)}
+      ${state.state === 'gap'
+        ? html`<button
+            @click=${() => {
+              void this._continuation.continueNext((time, current) =>
+                this._advanceRecording(time, current),
+              );
+            }}
+          >
+            ${localize('media_viewer.continue_next')}
+          </button>`
+        : ''}
+      ${state.state === 'loading'
+        ? html`<button @click=${() => this._continuation.cancel()}>
+            ${localize('media_viewer.cancel_continuation')}
+          </button>`
+        : ''}
+    </div>`;
+  }
+
+  private async _advanceRecording(time: Date, current: () => boolean): Promise<void> {
+    const view = this.viewManagerEpoch?.manager.getView();
+    const camera = this.viewFilterCameraID ?? view?.camera;
+    if (!view || !camera || !this.cameraManager || !this.viewManagerEpoch) {
+      throw new Error('Recording continuation unavailable');
+    }
+    const queries = this.cameraManager.generateDefaultRecordingQueries(camera, {
+      start: new Date(time.getTime() - 1800000),
+      end: new Date(time.getTime() + 1800000),
+    });
+    if (!queries?.length) {
+      throw new Error('Recording continuation unavailable');
+    }
+    // Revalidate the next file before switching; retention may have removed a
+    // file that was present in the earlier viewport snapshot.
+    const media = await this.cameraManager.executeMediaQueries(queries, {
+      useCache: false,
+    });
+    if (!current()) {
+      return;
+    }
+    if (media === null) {
+      throw new Error('Recording continuation unavailable');
+    }
+    const results = new QueryResults({ results: media, selectedIndex: null });
+    results.resetSelectedResult(camera);
+    results.selectBestResult((items) => findBestMediaTimeIndex(items, time, camera), {
+      main: true,
+      allCameras: true,
+    });
+    if (!results.hasSelectedResult()) {
+      throw new Error('Next recording unavailable');
+    }
+    this.viewManagerEpoch.manager.setViewByParameters({
+      params: {
+        view: 'recording',
+        camera,
+        query: new UnifiedQuery(queries),
+        queryResults: results,
+      },
+      modifiers: [new MergeContextViewModifier({ mediaViewer: { seek: time } })],
+    });
+  }
+
+  private async _recordingEnded(media: ViewMedia): Promise<void> {
+    const manager = this.cameraManager;
+    const camera = media.getCameraID();
+    if (!manager || !camera || !this._media) {
+      return;
+    }
+    await this._continuation.ended(media, this._media, {
+      now: new Date(),
+      load: async (start, end) => {
+        const queries = manager.generateDefaultRecordingQueries(camera, { start, end });
+        if (!queries?.length) {
+          throw new Error('Recording continuation unavailable');
+        }
+        return manager.executeMediaQueries(queries);
+      },
+      advance: (time, current) => this._advanceRecording(time, current),
+    });
   }
 
   updated(changedProperties: PropertyValues): void {
@@ -492,6 +599,21 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
           .cameraManager=${this.cameraManager}
           .cardWideConfig=${this.cardWideConfig}
           .forceSelected=${isSelected}
+          @advanced-camera-card:media:ended=${() => {
+            if (isSelected) {
+              void this._recordingEnded(media);
+            }
+          }}
+          @advanced-camera-card:media:pause-request=${() => {
+            if (isSelected) {
+              this._continuation.cancel();
+            }
+          }}
+          @advanced-camera-card:media:seek-request=${() => {
+            if (isSelected) {
+              this._continuation.cancel();
+            }
+          }}
         ></advanced-camera-card-viewer-provider>`,
       )}
     </div>`;

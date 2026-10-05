@@ -9,6 +9,7 @@ import type {
   UnsubscribeCallback,
 } from '../../types';
 import { hideMediaControlsTemporarily, setControlsOnVideo } from '../../utils/controls';
+import { fireAdvancedCameraCardEvent } from '../../utils/fire-advanced-camera-card-event';
 import { screenshotVideo } from '../../utils/screenshot';
 import { FrameStallWatchdog } from './frame-stall-watchdog';
 
@@ -104,6 +105,9 @@ export class VideoMediaPlayerController
     },
 
     pause: async (): Promise<void> => {
+      // A pause request also matters while an ended player is waiting for its
+      // next original file, when native pause would emit no further event.
+      fireAdvancedCameraCardEvent(this._host, 'media:pause-request');
       await this._host.updateComplete;
       this._getVideoCallback()?.pause();
     },
