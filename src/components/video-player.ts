@@ -81,8 +81,9 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
   }
 
   public disconnectedCallback(): void {
-    super.disconnectedCallback();
+    // Lit clears ref directives when super disconnects the render tree.
     const video = this._refVideo.value;
+    super.disconnectedCallback();
     if (this.archive && video) {
       video.pause();
       video.removeAttribute('src');

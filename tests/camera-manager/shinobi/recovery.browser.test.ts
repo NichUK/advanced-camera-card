@@ -32,7 +32,8 @@ it('releases archive transport on disconnect and reloads a reconnected player', 
   const video = player.shadowRoot?.querySelector('video');
   assert(video);
   player.remove();
-  expect(video.querySelector('source')?.getAttribute('src')).toBeNull();
+  // HA's scoped-registry polyfill delivers disconnect reactions asynchronously.
+  await expect.poll(() => video.querySelector('source')?.getAttribute('src')).toBeNull();
   expect(video.readyState).toBe(0);
   expect(video.paused).toBe(true);
   document.body.append(player);
