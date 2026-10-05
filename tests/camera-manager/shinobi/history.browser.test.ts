@@ -1,4 +1,5 @@
 import { assert, expect, it } from 'vitest';
+import { userEvent } from 'vitest/browser';
 
 import '../../../src/components/timeline';
 
@@ -13,6 +14,7 @@ import { RESIZE_LOOP_CONSOLE_ERROR } from '../../browser/test-utils';
 const mount = async (
   mediaURL = createFixtureURL('shinobi-4k-h264.mp4'),
   browseGate?: (lower: number, upper: number) => Promise<void>,
+  archiveRequests?: { lower: number; upper: number; elapsed: number }[],
 ) => {
   const start = new Date('2026-10-02T12:34:00Z');
   const end = new Date('2026-10-02T12:36:00Z');
@@ -25,6 +27,27 @@ const mount = async (
     { start, end, contentID },
     { start: laterStart, end: laterEnd, contentID: laterID },
   ];
+  if (archiveRequests) {
+    // Fourteen quiet days of one-minute clips. A two-minute overlap at
+    // the selected instant exercises the actual decoded fixture. Query responses expose only intersecting intervals.
+    const archiveStart = new Date('2026-09-22T00:00:00Z').getTime();
+    clips.splice(
+      0,
+      clips.length,
+      ...Array.from({ length: 14 * 1440 }, (_, index) => {
+        const clipStart = new Date(archiveStart + index * 60000);
+        const clipEnd = new Date(clipStart.getTime() + 60000);
+        return {
+          start: clipStart,
+          end: clipEnd,
+          contentID: `media-source://shinobi_recordings/clip|preview|garden|v1-${index.toString(16).padStart(64, '0')}|${clipStart.getTime() / 1000}|${clipEnd.getTime() / 1000}`,
+        };
+      }),
+    );
+  }
+  if (archiveRequests) {
+    clips.push({ start, end, contentID });
+  }
   const hass = new FakeHASS({
     entities: {
       'camera.archive': {
@@ -43,7 +66,9 @@ const mount = async (
     const parts = identifier.split('|');
     const lower = Number(parts[3]) * 1000;
     const upper = Number(parts[4]) * 1000;
+    const before = performance.now();
     await browseGate?.(lower, upper);
+    archiveRequests?.push({ lower, upper, elapsed: performance.now() - before });
     return {
       title: 'Window',
       media_class: 'directory',
@@ -78,7 +103,7 @@ const mount = async (
       cameras: [{ camera_entity: 'camera.archive', engine: 'shinobi' }],
       view: { default: 'timeline' },
       timeline: { show_recordings: true },
-      media_viewer: { controls: { timeline: { mode: 'below' } } },
+      media_viewer: { controls: { timeline: { mode: 'below', show_recordings: true } } },
     },
     hass,
     { toleratedConsoleErrors: [RESIZE_LOOP_CONSOLE_ERROR] },
@@ -171,6 +196,111 @@ for (const mode of ['cold', 'warm'] as const) {
     30000,
   );
 }
+
+it('renders quiet coverage and bounds twenty keyboard viewport changes across a fourteen-day archive', async ({
+  task,
+}) => {
+  const requests: { lower: number; upper: number; elapsed: number }[] = [];
+  const card = await mount(undefined, undefined, requests);
+  await choose(card, new Date('2026-10-02T12:35:00Z'));
+  await waitForSelectedFrame(card);
+  const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+    card.card,
+    'advanced-camera-card-timeline-core',
+  ).find((element) => element.getBoundingClientRect().height > 0);
+  assert(core);
+  await expect
+    .poll(() => core.shadowRoot?.textContent?.includes('Recording coverage checked'))
+    .toBe(true);
+  await expect
+    .poll(() => deepQueryAll(core, '.vis-item.vis-background').length)
+    .toBeGreaterThan(0);
+  const observations: number[] = [];
+  for (let index = 0; index < 20; index++) {
+    const button = deepQuery<HTMLButtonElement>(core, 'button[aria-label="Later"]');
+    assert(button);
+    const view = core.viewManagerEpoch?.manager.getView();
+    const previous = view?.context?.timeline?.window?.start.getTime();
+    const before = performance.now();
+    button.focus();
+    expect(core.shadowRoot?.activeElement).toBe(button);
+    await userEvent.keyboard('{Enter}');
+    await expect
+      .poll(() =>
+        core.viewManagerEpoch?.manager
+          .getView()
+          ?.context?.timeline?.window?.start.getTime(),
+      )
+      .not.toBe(previous);
+    await expect
+      .poll(() => core.shadowRoot?.textContent?.includes('Recording coverage checked'))
+      .toBe(true);
+    observations.push(performance.now() - before);
+  }
+  expect(requests.length).toBeLessThanOrEqual(24);
+  expect(
+    requests.every((request) => request.upper - request.lower <= 26 * 3600000),
+  ).toBe(true);
+  expect(
+    requests.every((request) => request.upper - request.lower < 14 * 24 * 3600000),
+  ).toBe(true);
+  const p95 = [...observations].sort((a, b) => a - b)[18];
+  Object.assign(task.meta, { viewportPerformance: { observations, p95, requests } });
+  expect(p95).toBeLessThanOrEqual(2000);
+}, 60000);
+
+it('selects actual quiet coverage through a rendered timeline click', async () => {
+  const requests: { lower: number; upper: number; elapsed: number }[] = [];
+  const card = await mount(undefined, undefined, requests);
+  await choose(card, new Date('2026-10-02T12:35:00Z'));
+  await waitForSelectedFrame(card);
+  const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+    card.card,
+    'advanced-camera-card-timeline-core',
+  ).find((element) => element.getBoundingClientRect().height > 0);
+  assert(core);
+  await expect
+    .poll(() => deepQueryAll(core, '.vis-item.vis-background').length)
+    .toBeGreaterThan(0);
+  const coverage = deepQuery<HTMLElement>(core, '.vis-item.vis-background');
+  assert(coverage);
+  const previousTarget = core.viewManagerEpoch?.manager
+    .getView()
+    ?.context?.mediaViewer?.seek?.getTime();
+  const bounds = coverage.getBoundingClientRect();
+  const panel = deepQuery<HTMLElement>(core, '.vis-panel.vis-center');
+  assert(panel);
+  const visible = panel.getBoundingClientRect();
+  await userEvent.click(coverage, {
+    force: true,
+    position: {
+      x: visible.left + visible.width / 4 - bounds.left,
+      y: visible.top + visible.height / 2 - bounds.top,
+    },
+  });
+  await expect
+    .poll(() =>
+      core.viewManagerEpoch?.manager.getView()?.context?.mediaViewer?.seek?.getTime(),
+    )
+    .not.toBe(previousTarget);
+  await expect
+    .poll(() => {
+      const view = core.viewManagerEpoch?.manager.getView();
+      const selected = view?.queryResults?.getSelectedResult();
+      const target = view?.context?.mediaViewer?.seek;
+      return (
+        !!target &&
+        !!selected &&
+        'includesTime' in selected &&
+        typeof selected.includesTime === 'function' &&
+        selected.includesTime(target)
+      );
+    })
+    .toBe(true);
+  await expect
+    .poll(() => getSelectedVideo(card)?.readyState)
+    .toBeGreaterThanOrEqual(HTMLMediaElement.HAVE_CURRENT_DATA);
+});
 
 it('shows no selected recording in a complete gap', async () => {
   const card = await mount();

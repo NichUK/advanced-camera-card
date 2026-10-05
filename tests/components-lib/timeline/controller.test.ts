@@ -77,6 +77,7 @@ const createHarness = async (options?: {
   media?: ViewMedia[];
   mini?: boolean;
   style?: 'ribbon' | 'stack';
+  showRecordings?: boolean;
 }): Promise<TestHarness> => {
   stubMatchMedia().mockReturnValue({ matches: true });
 
@@ -115,7 +116,10 @@ const createHarness = async (options?: {
     cameraManager: cameraManager,
     foldersManager: mock<FoldersManager>(),
     conditionStateManager: mock<ConditionStateManagerReadonlyInterface>(),
-    timelineConfig: createTimelineConfig(options?.panMode ?? 'pan', options?.style),
+    timelineConfig: {
+      ...createTimelineConfig(options?.panMode ?? 'pan', options?.style),
+      show_recordings: options?.showRecordings ?? false,
+    },
     mini: options?.mini ?? true,
     query,
   });
@@ -403,6 +407,57 @@ describe('TimelineController', () => {
     });
   });
 
+  it('exposes unavailable recording coverage without changing playback selection', async () => {
+    const bounded = vi
+      .spyOn(TimelineDataSource.prototype, 'requiresBoundedWindows')
+      .mockReturnValue(true);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const harness = await createHarness({ showRecordings: true });
+      expect(harness.controller.getRecordingCoverageState()).toBe('error');
+      expect(
+        harness.manager.setViewByParametersWithExistingQuery,
+      ).not.toHaveBeenCalled();
+    } finally {
+      bounded.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
+  it.each([
+    ['previous' as const, -30, 60],
+    ['next' as const, 30, 60],
+    ['in' as const, 0, 30],
+    ['out' as const, 0, 120],
+  ])(
+    'supports viewport action %s without changing the selected playback instant',
+    async (action, shift, width) => {
+      const harness = await createHarness();
+      const center = add(WINDOW.start, { minutes: 30 + shift });
+      harness.controller.adjustTimelineWindow(action);
+      const context = vi
+        .mocked(harness.manager.setViewWithMergedContext)
+        .mock.calls.at(-1)?.[0];
+      expect(context?.timeline?.window).toEqual({
+        start: add(center, { minutes: -width / 2 }),
+        end: add(center, { minutes: width / 2 }),
+      });
+      expect(
+        harness.manager.setViewByParametersWithExistingQuery,
+      ).not.toHaveBeenCalled();
+      expect(harness.controller.getRecordingCoverageState()).toBeNull();
+      harness.controller.destroyTimeline();
+      vi.mocked(harness.manager.setViewWithMergedContext).mockClear();
+      harness.controller.adjustTimelineWindow(action);
+      expect(harness.manager.setViewWithMergedContext).not.toHaveBeenCalled();
+      expect(
+        new TimelineController(
+          new TimelineControllerTestHost(),
+        ).getRecordingCoverageState(),
+      ).toBeNull();
+    },
+  );
+
   it('keeps exact playback queries when a primary timeline fits its viewport', async () => {
     const bounded = vi
       .spyOn(TimelineDataSource.prototype, 'requiresBoundedWindows')
@@ -427,8 +482,8 @@ describe('TimelineController', () => {
         .mocked(harness.manager.setViewWithMergedContext)
         .mock.calls.at(-1)?.[0];
       expect(selectedContext?.timeline?.window).toEqual({
-        start: add(chosen, { hours: -12 }),
-        end: add(chosen, { hours: 12 }),
+        start: add(chosen, { minutes: -30 }),
+        end: add(chosen, { minutes: 30 }),
       });
       vi.mocked(harness.timeline.getWindow).mockReturnValue(WINDOW);
       const current = harness.manager.getView();

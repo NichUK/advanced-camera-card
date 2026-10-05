@@ -270,8 +270,11 @@ export class TimelineController {
     const window = this._timeline.getWindow();
     const width = window.end.getTime() - window.start.getTime();
     const halfWidth =
-      (this._source?.requiresBoundedWindows() ? Math.min(width, 24 * 3600000) : width) /
-      2;
+      (this._source?.requiresBoundedWindows()
+        ? width > 24 * 3600000
+          ? Math.min(this._getConfiguredWindowSeconds() * 1000, 24 * 3600000)
+          : width
+        : width) / 2;
     const selectedWindow = {
       start: new Date(date.getTime() - halfWidth),
       end: new Date(date.getTime() + halfWidth),
@@ -593,7 +596,8 @@ export class TimelineController {
     if (
       this._timelineConfig?.show_recordings &&
       properties.time &&
-      ['background', 'axis'].includes(properties.what) &&
+      (['background', 'axis'].includes(properties.what) ||
+        item?.type === 'background') &&
       this._source &&
       this._timeline
     ) {
@@ -755,7 +759,7 @@ export class TimelineController {
     }
 
     const dateSelectionEpoch = ++this._navigationEpoch;
-    await this._source?.refresh(this._getPrefetchWindow(properties));
+    await this._refreshSource(this._getPrefetchWindow(properties));
 
     if (
       dateSelectionEpoch !== this._navigationEpoch ||
@@ -794,6 +798,42 @@ export class TimelineController {
       current.context?.mediaViewer?.seek?.getTime() ===
         view.context?.mediaViewer?.seek?.getTime()
     );
+  }
+
+  public adjustTimelineWindow(action: 'previous' | 'next' | 'in' | 'out'): void {
+    if (!this._timeline) {
+      return;
+    }
+    const window = this._timeline.getWindow();
+    const width = window.end.getTime() - window.start.getTime();
+    const center = (window.start.getTime() + window.end.getTime()) / 2;
+    const shifted =
+      center + (action === 'previous' ? -width / 2 : action === 'next' ? width / 2 : 0);
+    const resized = Math.min(
+      24 * 3600000,
+      Math.max(1000, action === 'in' ? width / 2 : action === 'out' ? width * 2 : width),
+    );
+    const selectedWindow = {
+      start: new Date(shifted - resized / 2),
+      end: new Date(shifted + resized / 2),
+    };
+    this._viewManagerEpoch?.manager.setViewWithMergedContext(
+      this._getTimelineContext(selectedWindow),
+    );
+    this._timeline.setWindow(selectedWindow.start, selectedWindow.end, {
+      animation: false,
+    });
+  }
+
+  public getRecordingCoverageState(): 'loading' | 'complete' | 'error' | null {
+    return this._source?.getRecordingCoverageState()?.state ?? null;
+  }
+
+  private async _refreshSource(window: TimelineWindow): Promise<void> {
+    const work = this._source?.refresh(window);
+    this._host.requestUpdate();
+    await work;
+    this._host.requestUpdate();
   }
 
   public shouldKeepDatePickerVisible(view: View | null | undefined): boolean {
@@ -883,7 +923,7 @@ export class TimelineController {
       // (via fetchIfNecessary) may update the timeline contents which causes
       // the visjs timeline to stop dragging/panning operations which is very
       // disruptive to the user.
-      await this._source?.refresh(prefetchedWindow);
+      await this._refreshSource(prefetchedWindow);
       this._source.addMediaToDataset(view.query, view.queryResults?.getResults());
     }
 

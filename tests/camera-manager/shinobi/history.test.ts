@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { assert, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 
 import { ShinobiCameraManagerEngine } from '../../../src/camera-manager/shinobi/engine-shinobi';
@@ -77,6 +78,208 @@ const setup = async () => {
 };
 
 describe('Shinobi historical recording selection', () => {
+  it('exposes quiet recording segments within a required viewport without inventing events', async () => {
+    const { hass, walker, engine, store, query } = await setup();
+    expect(
+      engine.generateDefaultRecordingSegmentsQuery(store, query.cameraIDs, {}),
+    ).toBeNull();
+    expect(
+      engine.generateDefaultRecordingSegmentsQuery(store, query.cameraIDs, { start }),
+    ).toBeNull();
+    const defaults = engine.generateDefaultRecordingSegmentsQuery(
+      store,
+      query.cameraIDs,
+      { start, end },
+    );
+    expect(defaults).toEqual([
+      {
+        type: QueryType.RecordingSegments,
+        cameraIDs: query.cameraIDs,
+        start,
+        end,
+      },
+    ]);
+    const segmentsQuery = { ...query, type: QueryType.RecordingSegments as const };
+    const result = await engine.getRecordingSegments(hass, store, segmentsQuery);
+    expect([...result.values()]).toEqual([
+      {
+        engine: Engine.Shinobi,
+        type: QueryResultsType.RecordingSegments,
+        segments: [
+          { id, start_time: start.getTime() / 1000, end_time: end.getTime() / 1000 },
+        ],
+      },
+    ]);
+    expect(walker.walk).toHaveBeenCalledOnce();
+    walker.walk.mockResolvedValue([]);
+    expect(
+      [
+        ...(await engine.getRecordingSegments(hass, store, segmentsQuery, {
+          useCache: false,
+        })),
+      ].map(([, value]) => value.segments),
+    ).toEqual([[]]);
+  });
+
+  it('coalesces identical pending metadata, reuses contained windows and expires them', async () => {
+    const { hass, walker, engine, store, query } = await setup();
+    let release: ((value: (typeof child)[]) => void) | undefined;
+    const pending = new Promise<(typeof child)[]>((resolve) => {
+      release = resolve;
+    });
+    walker.walk.mockReturnValueOnce(pending);
+    const first = engine.getRecordings(hass, store, query);
+    const contained = {
+      ...query,
+      start: new Date(start.getTime() + 30000),
+      end: new Date(end.getTime() - 30000),
+    };
+    const second = engine.getRecordingSegments(hass, store, {
+      ...query,
+      type: QueryType.RecordingSegments,
+    });
+    assert(release);
+    release([child]);
+    await Promise.all([first, second]);
+    expect(walker.walk).toHaveBeenCalledOnce();
+    await engine.getRecordings(hass, store, contained);
+    expect(walker.walk).toHaveBeenCalledOnce();
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(new Date().getTime() + 31000));
+      await engine.getRecordings(hass, store, query);
+      expect(walker.walk).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    await engine.getRecordings(hass, store, query, { useCache: false });
+    expect(walker.walk).toHaveBeenCalledTimes(3);
+  });
+
+  it('filters cached coverage at half-open gaps, separates cameras and bounds retained windows', async () => {
+    const { hass, walker, engine, store, query } = await setup();
+    const broad = {
+      ...query,
+      start: new Date(start.getTime() - 60000),
+      end: new Date(end.getTime() + 60000),
+    };
+    await engine.getRecordings(hass, store, broad);
+    for (const bounds of [
+      { start: broad.start, end: start },
+      { start: end, end: broad.end },
+    ]) {
+      const contained = { ...query, ...bounds };
+      const results = (await engine.getRecordings(hass, store, contained)).get(
+        contained,
+      );
+      assert(results);
+      expect(
+        engine.generateMediaFromRecordings(hass, store, contained, results),
+      ).toEqual([]);
+    }
+    expect(walker.walk).toHaveBeenCalledOnce();
+    store.addCamera(
+      await engine.createCamera(
+        createCameraConfig({ id: 'second', camera_entity: 'camera.archive' }),
+      ),
+    );
+    await engine.getRecordings(hass, store, {
+      ...query,
+      cameraIDs: new Set(['second']),
+    });
+    expect(walker.walk).toHaveBeenCalledTimes(2);
+    walker.walk.mockResolvedValue([]);
+    const windows = Array.from({ length: 20 }, (_, index) => ({
+      ...query,
+      start: new Date(end.getTime() + (index + 1) * 3600000),
+      end: new Date(end.getTime() + (index + 1) * 3600000 + 60000),
+    }));
+    for (const window of windows) {
+      await engine.getRecordings(hass, store, window);
+    }
+    await engine.getRecordings(hass, store, windows[19]);
+    expect(walker.walk).toHaveBeenCalledTimes(22);
+    await engine.getRecordings(hass, store, windows[0]);
+    expect(walker.walk).toHaveBeenCalledTimes(23);
+  });
+
+  it('releases timed-out pending work so retry can request fresh metadata', async () => {
+    const { hass, walker, engine, store, query } = await setup();
+    let release: ((value: (typeof child)[]) => void) | undefined;
+    const pending = new Promise<(typeof child)[]>((resolve) => {
+      release = resolve;
+    });
+    walker.walk.mockReturnValueOnce(pending);
+    vi.useFakeTimers();
+    try {
+      const stale = engine.getRecordings(hass, store, query);
+      const failure = expect(stale).rejects.toThrow('metadata timeout');
+      await vi.advanceTimersByTimeAsync(10000);
+      await failure;
+      walker.walk.mockResolvedValue([child]);
+      await engine.getRecordings(hass, store, query);
+      expect(walker.walk).toHaveBeenCalledTimes(2);
+      assert(release);
+      release([]);
+      await pending;
+      await vi.advanceTimersByTimeAsync(0);
+      const result = (await engine.getRecordings(hass, store, query)).get(query);
+      assert(result);
+      expect(
+        engine.generateMediaFromRecordings(hass, store, query, result),
+      ).toHaveLength(1);
+      expect(walker.walk).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not cache failed metadata or silently overload pending requests', async () => {
+    const { hass, walker, engine, store, query } = await setup();
+    walker.walk.mockRejectedValueOnce(new Error('Unavailable'));
+    await expect(engine.getRecordings(hass, store, query)).rejects.toThrow(
+      'Unavailable',
+    );
+    await engine.getRecordings(hass, store, query);
+    expect(walker.walk).toHaveBeenCalledTimes(2);
+    let release: ((value: (typeof child)[]) => void) | undefined;
+    const pending = new Promise<(typeof child)[]>((resolve) => {
+      release = resolve;
+    });
+    walker.walk.mockReturnValue(pending);
+    const requests = Array.from({ length: 16 }, (_, index) =>
+      engine.getRecordings(
+        hass,
+        store,
+        {
+          ...query,
+          start: new Date(start.getTime() + index * 1000),
+          end: new Date(end.getTime() + index * 1000),
+        },
+        { useCache: false },
+      ),
+    );
+    await expect(
+      engine.getRecordings(
+        hass,
+        store,
+        {
+          ...query,
+          start: new Date(start.getTime() + 16000),
+          end: new Date(end.getTime() + 16000),
+        },
+        { useCache: false },
+      ),
+    ).rejects.toThrow('requests busy');
+    assert(release);
+    release([]);
+    await Promise.all(requests);
+    walker.walk.mockResolvedValue(Array.from({ length: 10001 }, () => child));
+    await expect(
+      engine.getRecordings(hass, store, query, { useCache: false }),
+    ).rejects.toThrow('metadata limit exceeded');
+  });
+
   it('selects the next contiguous file at its half-open boundary and seeks across midnight', async () => {
     const { hass, engine, store } = await setup();
     const before = new ShinobiRecording(
