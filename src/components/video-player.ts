@@ -11,12 +11,14 @@ import { live } from 'lit/directives/live.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import { ShinobiArchiveError } from '../camera-manager/shinobi/errors.js';
+import { preflightShinobiMedia } from '../camera-manager/shinobi/resolve.js';
 import { MediaLoadedInfoSourceController } from '../components-lib/media-loaded-info-source-controller.js';
 import { VideoMediaPlayerController } from '../components-lib/media-player/video';
 import { triggerMediaUnavailableIssue } from '../components-lib/media-unavailable-issue.js';
 import videoPlayerStyle from '../scss/video-player.scss?inline';
 import type { MediaPlayer, MediaPlayerController, MediaPlayerElement } from '../types';
 import { mayHaveAudio } from '../utils/audio';
+import { withTimeout } from '../utils/concurrency/with-timeout';
 import {
   hideMediaControlsTemporarily,
   MEDIA_LOAD_CONTROLS_HIDE_SECONDS,
@@ -52,12 +54,39 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
       code === 3 ? 'decode' : code === 2 ? 'network' : 'unsupported',
       'playback',
     );
+    this._reportArchiveError(error);
+  }
+
+  private _reportArchiveError(error: ShinobiArchiveError): void {
+    if (!this.targetID) {return;}
     triggerMediaUnavailableIssue(this, {
       targetID: this.targetID,
       reason: error.category === 'network' ? 'server_error' : 'unsupported',
       description: error.message,
       automaticRetry: error.retryable,
     });
+  }
+
+  private async _archiveSourceError(): Promise<void> {
+    if (!this.archive || !this.url || !this.targetID) {return;}
+    const url = this.url;
+    const targetID = this.targetID;
+    const abort = new AbortController();
+    let error = new ShinobiArchiveError('unsupported', 'playback');
+    try {
+      await withTimeout(
+        preflightShinobiMedia(url, abort, 'playback'),
+        10000,
+        new ShinobiArchiveError('timeout', 'playback'),
+      );
+    } catch (failure) {
+      if (failure instanceof ShinobiArchiveError) {error = failure;}
+    } finally {
+      abort.abort();
+    }
+    if (this.isConnected && this.url === url && this.targetID === targetID) {
+      this._reportArchiveError(error);
+    }
   }
 
   private _refVideo: Ref<MediaPlayerElement<HTMLVideoElement>> = createRef();
@@ -83,6 +112,7 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
   public disconnectedCallback(): void {
     // Lit clears ref directives when super disconnects the render tree.
     const video = this._refVideo.value;
+    if (this.archive) {this._mediaLoadedInfoSourceController.clear();}
     super.disconnectedCallback();
     if (this.archive && video) {
       video.pause();
@@ -150,7 +180,7 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
         <source
           src=${live(this.url ?? nothing)}
           type="video/mp4"
-          @error=${() => this._archiveError()}
+          @error=${() => void this._archiveSourceError()}
         />
       </video>
     `;

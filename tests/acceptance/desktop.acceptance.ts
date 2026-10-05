@@ -8,7 +8,7 @@ import type { AdvancedCameraCardTimelineCore } from '../../src/components/timeli
 import type { AdvancedCameraCardViewerProvider } from '../../src/components/viewer/provider';
 import { deepQuery, deepQueryAll } from '../browser/dom';
 import { FakeHASS } from '../browser/fake-hass';
-import { MountedCardFactory } from '../browser/mounted-card';
+import { MountedCardFactory, type MountedCard } from '../browser/mounted-card';
 import {
   getBlockNotificationText,
   RESIZE_LOOP_CONSOLE_ERROR,
@@ -25,6 +25,14 @@ const bootstrapSchema = z.object({
   base_url: z.url().optional(),
 });
 let bootstrap: z.infer<typeof bootstrapSchema>;
+const destroyChecked = (card: MountedCard): void => {
+  expect(
+    card.console
+      .getMessages('error')
+      .filter((message) => !RESIZE_LOOP_CONSOLE_ERROR.test(message)),
+  ).toEqual([]);
+  card.destroy();
+};
 declare global {
   interface ImportMeta {
     readonly env: ImportMetaEnv;
@@ -222,6 +230,8 @@ it.skipIf(import.meta.env.SHINOBI_EXPECT_UNSUPPORTED)(
       assert(video);
       const initial = selected()?.media?.getID();
       assert(initial);
+      const initialEnd = selected()?.media?.getEndTime();
+      assert(initialEnd);
       video.pause();
       video.currentTime = video.duration - 0.2;
       await expect
@@ -264,6 +274,13 @@ it.skipIf(import.meta.env.SHINOBI_EXPECT_UNSUPPORTED)(
           { timeout: 10000 },
         )
         .toBe(true);
+      const nextStart = selected()?.media?.getStartTime();
+      assert(nextStart);
+      if (gap) {
+        expect(nextStart.getTime()).toBeGreaterThan(initialEnd.getTime());
+      } else {
+        expect(nextStart.getTime()).toBe(initialEnd.getTime());
+      }
       observations.push({
         gap,
         milliseconds: performance.now() - ended,
@@ -276,7 +293,7 @@ it.skipIf(import.meta.env.SHINOBI_EXPECT_UNSUPPORTED)(
           browser: navigator.userAgent,
         },
       });
-      card.destroy();
+      destroyChecked(card);
     }
     const adjacent = observations
       .filter((row) => !row.gap)
@@ -354,6 +371,7 @@ it.skipIf(import.meta.env.SHINOBI_EXPECT_UNSUPPORTED)(
             Object.assign(task.meta, { clearSeekDiagnostics: state });
             return (
               !video.seeking &&
+              video.paused &&
               video.readyState >= 2 &&
               Math.abs(video.currentTime - soughtOffset) <= 1
             );
@@ -384,7 +402,7 @@ it.skipIf(import.meta.env.SHINOBI_EXPECT_UNSUPPORTED)(
       expect(row.offsetError).toBeLessThanOrEqual(1);
       expect(row.seekError).toBeLessThanOrEqual(1);
       expect(row.milliseconds).toBeLessThanOrEqual(5000);
-      card.destroy();
+      destroyChecked(card);
     }
   },
   180000,
@@ -415,7 +433,7 @@ it.runIf(import.meta.env.SHINOBI_EXPECT_UNSUPPORTED)(
       Object.assign(task.meta, {
         originalUnsupported: { observations, browser: navigator.userAgent },
       });
-      card.destroy();
+      destroyChecked(card);
     }
   },
   180000,

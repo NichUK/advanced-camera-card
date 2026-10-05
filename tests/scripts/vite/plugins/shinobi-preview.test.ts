@@ -2,6 +2,12 @@ import { expect, it } from 'vitest';
 
 import { namespaceShinobiPreview } from '../../../../scripts/vite/plugins/shinobi-preview';
 
+it('cannot identify or delete the baseline legacy dashboard resource', () => {
+  expect(namespaceShinobiPreview('frigate-hass-card.js')).toBe(
+    'shinobi-preview-legacy-card.js',
+  );
+});
+
 it('namespaces runtime tags, attributes, CSS, events, legacy aliases and debug arrays', () => {
   expect(
     namespaceShinobiPreview(
