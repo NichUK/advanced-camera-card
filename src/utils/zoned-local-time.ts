@@ -8,6 +8,9 @@ export interface ZonedLocalTimeResult {
   error: 'invalid_time_zone' | 'invalid_local_time' | 'nonexistent_local_time' | null;
 }
 
+const OFFSET_PROBE_WINDOW_HOURS = 48;
+const OFFSET_PROBE_STEP_HOURS = 6;
+
 export function resolveZonedLocalTime(
   value: string,
   timeZone: string,
@@ -55,7 +58,11 @@ export function resolveZonedLocalTime(
   // Sample both sides of a transition, then round-trip each possible offset.
   // Never let Date's local parser normalize a missing hour or choose a fold.
   const offsets = new Set<number>();
-  for (let hours = -48; hours <= 48; hours += 6) {
+  for (
+    let hours = -OFFSET_PROBE_WINDOW_HOURS;
+    hours <= OFFSET_PROBE_WINDOW_HOURS;
+    hours += OFFSET_PROBE_STEP_HOURS
+  ) {
     const probe = new Date(nominal.getTime() + hours * 3600000);
     offsets.add(new Date(`${wallTime(probe)}:00Z`).getTime() - probe.getTime());
   }
