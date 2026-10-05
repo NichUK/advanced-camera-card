@@ -15,12 +15,16 @@ import {
 
 import type { CameraManager } from '../../camera-manager/manager';
 import { rangesOverlap } from '../../camera-manager/range';
+import { ShinobiCamera } from '../../camera-manager/shinobi/camera';
 import { Engine } from '../../camera-manager/types';
 import { convertRangeToCacheFriendlyTimes } from '../../camera-manager/utils/range-to-cache-friendly';
 import type { FoldersManager } from '../../card-controller/folders/manager';
 import type { ViewItemManager } from '../../card-controller/view/item-manager';
 import { MergeContextViewModifier } from '../../card-controller/view/modifiers/merge-context';
-import type { ViewManagerEpoch } from '../../card-controller/view/types';
+import type {
+  QueryExecutorOptions,
+  ViewManagerEpoch,
+} from '../../card-controller/view/types';
 import type { ConditionStateManagerReadonlyInterface } from '../../condition-trigger/conditions/types';
 import type { CameraConfig } from '../../config/schema/cameras';
 import type { AdvancedCameraCardView } from '../../config/schema/common/const';
@@ -40,7 +44,7 @@ import { ViewItemClassifier } from '../../view/item-classifier';
 import { QueryResults } from '../../view/query-results';
 import type { UnifiedQuery } from '../../view/unified-query';
 import { UnifiedQueryTransformer } from '../../view/unified-query-transformer';
-import { mergeViewContext } from '../../view/view';
+import { mergeViewContext, type View } from '../../view/view';
 import {
   canMediaBeShownAsTimelineItem,
   TimelineDataSource,
@@ -86,7 +90,7 @@ export class TimelineController {
 
   private _source: TimelineDataSource | null = null;
   private _timeline: ExtendedTimeline | null = null;
-  private _dateSelectionEpoch = 0;
+  private _navigationEpoch = 0;
 
   private _hass: HomeAssistant | null = null;
 
@@ -129,6 +133,7 @@ export class TimelineController {
   }
 
   public destroyTimeline(): void {
+    this._navigationEpoch++;
     this._timeline?.destroy();
     this._timeline = null;
     this._targetBarVisible = false;
@@ -261,9 +266,12 @@ export class TimelineController {
     if (!this._timeline) {
       return;
     }
-    this._dateSelectionEpoch++;
+    this._navigationEpoch++;
     const window = this._timeline.getWindow();
-    const halfWidth = (window.end.getTime() - window.start.getTime()) / 2;
+    const width = window.end.getTime() - window.start.getTime();
+    const halfWidth =
+      (this._source?.requiresBoundedWindows() ? Math.min(width, 24 * 3600000) : width) /
+      2;
     const selectedWindow = {
       start: new Date(date.getTime() - halfWidth),
       end: new Date(date.getTime() + halfWidth),
@@ -301,6 +309,28 @@ export class TimelineController {
         });
       }
     }
+  }
+
+  public getDatePickerTimeZone(): string | null {
+    const view = this._viewManagerEpoch?.manager.getView();
+    const cameraIDs =
+      view?.query?.getAllCameraIDs() ??
+      (view?.camera ? new Set([view.camera]) : this._source?.shape.getAllCameraIDs());
+    if (!cameraIDs?.size) {
+      return null;
+    }
+    const cameras = Array.from(cameraIDs).map((id) =>
+      this._cameraManager?.getStore().getCamera(id),
+    );
+    if (!cameras.every((camera) => camera instanceof ShinobiCamera)) {
+      return null;
+    }
+    const zones = new Set(
+      cameras.map((camera) => camera.getArchive()?.shinobi_recordings_timezone),
+    );
+    return zones.size === 1 && zones.has(undefined) === false
+      ? Array.from(zones)[0] ?? null
+      : this._hass?.config.time_zone ?? null;
   }
 
   public shouldSupportSeeking(): boolean {
@@ -568,7 +598,7 @@ export class TimelineController {
       this._timeline
     ) {
       const query = this._source.buildRecordingsWindowedQuery(
-        convertRangeToCacheFriendlyTimes(
+        this._source.getCacheFriendlyWindow(
           this._getPrefetchWindow(this._timeline.getWindow()),
         ),
       );
@@ -677,6 +707,9 @@ export class TimelineController {
    * @returns A broader timeline.
    */
   private _getPrefetchWindow(window: TimelineWindow): TimelineWindow {
+    if (this._source) {
+      return this._source.getPrefetchWindow(window);
+    }
     const delta = differenceInSeconds(window.end, window.start);
     return {
       start: sub(window.start, { seconds: delta }),
@@ -692,7 +725,9 @@ export class TimelineController {
     window: TimelineWindow,
   ): UnifiedQuery {
     const prefetchWindow = this._getPrefetchWindow(window);
-    const cacheFriendlyWindow = convertRangeToCacheFriendlyTimes(prefetchWindow);
+    const cacheFriendlyWindow =
+      this._source?.getCacheFriendlyWindow(prefetchWindow) ??
+      convertRangeToCacheFriendlyTimes(prefetchWindow);
     return UnifiedQueryTransformer.rebuildQuery(query, {
       start: cacheFriendlyWindow.start,
       end: cacheFriendlyWindow.end,
@@ -705,7 +740,6 @@ export class TimelineController {
     byUser: boolean;
     event: Event & { additionalEvent: string };
   }): Promise<void> => {
-    const dateSelectionEpoch = this._dateSelectionEpoch;
     this._removeTargetBar();
     const view = this._viewManagerEpoch?.manager.getView();
 
@@ -720,16 +754,17 @@ export class TimelineController {
       return;
     }
 
+    const dateSelectionEpoch = ++this._navigationEpoch;
     await this._source?.refresh(this._getPrefetchWindow(properties));
 
     if (
-      dateSelectionEpoch !== this._dateSelectionEpoch ||
-      view !== this._viewManagerEpoch?.manager.getView()
+      dateSelectionEpoch !== this._navigationEpoch ||
+      !this._isCurrentTimelineView(view)
     ) {
       return;
     }
 
-    if (!view.query) {
+    if (!view.query || (!properties.byUser && this._hasExactTimeSelection(view))) {
       return;
     }
     const query = this._applyWindowToQuery(view.query, properties);
@@ -742,18 +777,42 @@ export class TimelineController {
       params: {
         query,
       },
-      queryExecutorOptions: {
-        selectResult: {
-          id:
-            this._viewManagerEpoch?.manager
-              .getView()
-              ?.queryResults?.getSelectedResult()
-              ?.getID() ?? undefined,
-        },
-      },
+      queryExecutorOptions: this._getTimelineQueryOptions(
+        this._viewManagerEpoch?.manager.getView() ?? view,
+      ),
       modifiers: [new MergeContextViewModifier(this._getTimelineContext())],
     });
   };
+
+  private _isCurrentTimelineView(view: View): boolean {
+    const current = this._viewManagerEpoch?.manager.getView();
+    return (
+      !!current &&
+      current.view === view.view &&
+      current.camera === view.camera &&
+      this._hasSameShape(view.query, current.query) &&
+      current.context?.mediaViewer?.seek?.getTime() ===
+        view.context?.mediaViewer?.seek?.getTime()
+    );
+  }
+
+  public shouldKeepDatePickerVisible(view: View | null | undefined): boolean {
+    return !!view && this._hasExactTimeSelection(view);
+  }
+
+  private _hasExactTimeSelection(view: View): boolean {
+    return !!view.context?.mediaViewer?.seek && !!this._source?.requiresBoundedWindows();
+  }
+
+  private _getTimelineQueryOptions(view: View): QueryExecutorOptions {
+    const time = view.context?.mediaViewer?.seek;
+    return {
+      selectResult:
+        time && this._source?.requiresBoundedWindows()
+          ? { time: { time } }
+          : { id: view.queryResults?.getSelectedResult()?.getID() ?? undefined },
+    };
+  }
 
   private _alreadyHasAcceptableMediaQuery(freshQuery: UnifiedQuery): boolean {
     const view = this._viewManagerEpoch?.manager.getView();
@@ -775,7 +834,7 @@ export class TimelineController {
   }
 
   private async _updateTimelineFromView(): Promise<void> {
-    const dateSelectionEpoch = this._dateSelectionEpoch;
+    const dateSelectionEpoch = this._navigationEpoch;
     const view = this._viewManagerEpoch?.manager.getView();
     if (!view || !this._timelineConfig || !this._source || !this._timeline) {
       return;
@@ -831,7 +890,7 @@ export class TimelineController {
     // A metadata response started before the date picker moved must not reset
     // the user's new window or cancel its animation.
     if (
-      dateSelectionEpoch !== this._dateSelectionEpoch ||
+      dateSelectionEpoch !== this._navigationEpoch ||
       view !== this._viewManagerEpoch?.manager.getView()
     ) {
       return;
@@ -891,22 +950,17 @@ export class TimelineController {
 
     if (
       !this._mini &&
+      !this._hasExactTimeSelection(view) &&
       freshMediaQuery &&
       !this._alreadyHasAcceptableMediaQuery(freshMediaQuery)
     ) {
-      const currentlySelectedResult = this._viewManagerEpoch?.manager
-        .getView()
-        ?.queryResults?.getSelectedResult();
-
       await this._viewManagerEpoch?.manager.setViewByParametersWithExistingQuery({
         params: {
           query: freshMediaQuery,
         },
-        queryExecutorOptions: {
-          selectResult: {
-            id: currentlySelectedResult?.getID() ?? undefined,
-          },
-        },
+        queryExecutorOptions: this._getTimelineQueryOptions(
+          this._viewManagerEpoch?.manager.getView() ?? view,
+        ),
         modifiers: [
           new MergeContextViewModifier(this._getTimelineContext(desiredWindow)),
         ],
@@ -1047,16 +1101,7 @@ export class TimelineController {
       return null;
     }
 
-    const cameraIDs = this._viewManagerEpoch?.manager
-      .getView()
-      ?.query?.getAllCameraIDs();
-    const shinobi =
-      !!cameraIDs?.size &&
-      Array.from(cameraIDs).every(
-        (id) =>
-          this._cameraManager?.getStore().getCamera(id)?.getEngine().getEngineType() ===
-          Engine.Shinobi,
-      );
+    const shinobi = !!this._source?.requiresBoundedWindows();
     const defaultWindow = this._getDefaultStartEnd();
     const stack = this._timelineConfig.style === 'stack';
     // Configuration for the Timeline, see:

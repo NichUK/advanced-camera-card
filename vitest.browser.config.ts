@@ -14,6 +14,9 @@ export default defineConfig({
   // plugin, reused unchanged.
   plugins: [svgPath()],
 
+  // Keep browser transforms local when worktrees share node_modules.
+  cacheDir: '.vitest/browser-cache',
+
   // Where the Mock Service Worker script is served from, which Vite serves at
   // the root of the page. Named rather than left at its default of `public/` in
   // the project root, which is the directory a Vite build copies into its

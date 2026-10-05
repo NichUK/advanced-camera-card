@@ -1,7 +1,7 @@
 import { add } from 'date-fns';
 import { LitElement } from 'lit';
 import type { TimelineEventPropertiesResult, TimelineWindow } from 'vis-timeline';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 
 import type { FoldersManager } from '../../../src/card-controller/folders/manager';
@@ -10,7 +10,10 @@ import type {
   ViewManagerInterface,
 } from '../../../src/card-controller/view/types';
 import { TimelineController } from '../../../src/components-lib/timeline/controller';
-import type { AdvancedCameraCardTimelineItem } from '../../../src/components-lib/timeline/source';
+import {
+  TimelineDataSource,
+  type AdvancedCameraCardTimelineItem,
+} from '../../../src/components-lib/timeline/source';
 import type {
   ExtendedTimeline,
   TimelineRangeChange,
@@ -62,6 +65,7 @@ const createTimelineConfig = (
 });
 
 interface TestHarness {
+  cameraManager: ReturnType<typeof createCameraManager>;
   controller: TimelineController;
   timeline: ExtendedTimeline;
   manager: ViewManagerInterface;
@@ -132,6 +136,7 @@ const createHarness = async (options?: {
   await controller.setView(mock<ViewManagerEpoch>({ manager: manager }));
 
   return {
+    cameraManager,
     controller: controller,
     timeline: timeline,
     manager: manager,
@@ -398,7 +403,126 @@ describe('TimelineController', () => {
     });
   });
 
+  it('keeps exact playback queries when a primary timeline fits its viewport', async () => {
+    const bounded = vi
+      .spyOn(TimelineDataSource.prototype, 'requiresBoundedWindows')
+      .mockReturnValue(true);
+    try {
+      const harness = await createHarness({ mini: false });
+      const initialOptions = timelineConstructor.mock.calls[0]?.at(-1);
+      initialOptions.onInitialDrawComplete();
+      expect(harness.timeline.setWindow).toHaveBeenCalledWith(
+        expect.any(Date),
+        expect.any(Date),
+        { animation: false },
+      );
+      expect(harness.controller.shouldKeepDatePickerVisible(undefined)).toBe(false);
+      vi.mocked(harness.timeline.getWindow).mockReturnValue({
+        start: WINDOW.start,
+        end: add(WINDOW.end, { days: 6 }),
+      });
+      const chosen = add(WINDOW.start, { minutes: 30 });
+      harness.controller.setTimelineDate(chosen);
+      const selectedContext = vi
+        .mocked(harness.manager.setViewWithMergedContext)
+        .mock.calls.at(-1)?.[0];
+      expect(selectedContext?.timeline?.window).toEqual({
+        start: add(chosen, { hours: -12 }),
+        end: add(chosen, { hours: 12 }),
+      });
+      vi.mocked(harness.timeline.getWindow).mockReturnValue(WINDOW);
+      const current = harness.manager.getView();
+      assert(current);
+      expect(harness.controller.shouldKeepDatePickerVisible(current)).toBe(false);
+      current.context = { mediaViewer: { seek: add(WINDOW.start, { minutes: 30 }) } };
+      expect(harness.controller.shouldKeepDatePickerVisible(current)).toBe(true);
+      vi.mocked(harness.manager.setViewByParametersWithExistingQuery).mockClear();
+      await harness.controller.setView(
+        mock<ViewManagerEpoch>({ manager: harness.manager }),
+      );
+      expect(
+        harness.manager.setViewByParametersWithExistingQuery,
+      ).not.toHaveBeenCalled();
+      harness.trigger('rangechanged', {
+        ...WINDOW,
+        byUser: false,
+        event: new Event('resize'),
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(
+        harness.manager.setViewByParametersWithExistingQuery,
+      ).not.toHaveBeenCalled();
+      harness.trigger('rangechanged', {
+        ...WINDOW,
+        byUser: true,
+        event: new Event('pointerup'),
+      });
+      await vi.waitFor(() =>
+        expect(
+          harness.manager.setViewByParametersWithExistingQuery,
+        ).toHaveBeenCalledOnce(),
+      );
+    } finally {
+      bounded.mockRestore();
+    }
+  });
+
   describe('should handle a click on an item', () => {
+    it.each([false, true])(
+      'retains a pan across benign clones and ignores a destroyed timeline (destroy=%s)',
+      async (destroy) => {
+        const harness = await createHarness();
+        let release: (() => void) | undefined;
+        let entered = false;
+        const pending = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        vi.mocked(harness.cameraManager.executeMediaQueries).mockImplementation(
+          async () => {
+            entered = true;
+            await pending;
+            return [];
+          },
+        );
+        const requested = {
+          start: add(WINDOW.start, { days: 1 }),
+          end: add(WINDOW.end, { days: 1 }),
+        };
+        vi.mocked(harness.timeline.getWindow).mockReturnValue(requested);
+        harness.trigger('rangechanged', {
+          ...requested,
+          byUser: true,
+          event: new Event('pointerup'),
+        });
+        await vi.waitFor(() => expect(entered).toBe(true));
+        const view = harness.manager.getView();
+        assert(view);
+        vi.mocked(harness.manager.getView).mockReturnValue(view.clone());
+        if (destroy) {
+          harness.controller.destroyTimeline();
+        }
+        assert(release);
+        release();
+        await pending;
+        if (destroy) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          expect(
+            harness.manager.setViewByParametersWithExistingQuery,
+          ).not.toHaveBeenCalled();
+        } else {
+          await vi.waitFor(() =>
+            expect(
+              harness.manager.setViewByParametersWithExistingQuery,
+            ).toHaveBeenCalledOnce(),
+          );
+          const options = vi.mocked(harness.manager.setViewByParametersWithExistingQuery)
+            .mock.calls[0][0];
+          const updated = view.clone();
+          options?.modifiers?.forEach((modifier) => modifier.modify(updated));
+          expect(updated.context?.timeline?.window).toEqual(requested);
+        }
+      },
+    );
     it('should seek to the clicked time within a review', async () => {
       const harness = await createHarness({ media: [createReviewMedia()] });
       const clickTime = add(WINDOW.start, { minutes: 30 });

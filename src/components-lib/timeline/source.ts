@@ -8,7 +8,7 @@ import {
   ExpiringMemoryRangeSet,
   MemoryRangeSet,
 } from '../../camera-manager/range';
-import type { RecordingSegment } from '../../camera-manager/types';
+import { Engine, type RecordingSegment } from '../../camera-manager/types';
 import { capEndDate } from '../../camera-manager/utils/cap-end-date';
 import { convertRangeToCacheFriendlyTimes } from '../../camera-manager/utils/range-to-cache-friendly';
 import type { FoldersManager } from '../../card-controller/folders/manager';
@@ -221,6 +221,34 @@ export class TimelineDataSource {
     this._dataset.update(data);
   }
 
+  public requiresBoundedWindows(): boolean {
+    const cameraIDs = this._shape.getAllCameraIDs();
+    const bounded = Array.from(cameraIDs).some(
+      (id) =>
+        this._cameraManager.getStore().getCamera(id)?.getEngine().getEngineType() ===
+        Engine.Shinobi,
+    );
+    return bounded;
+  }
+
+  public getCacheFriendlyWindow(window: TimelineWindow): TimelineWindow {
+    return this.requiresBoundedWindows()
+      ? window
+      : convertRangeToCacheFriendlyTimes(window);
+  }
+
+  public getPrefetchWindow(window: TimelineWindow): TimelineWindow {
+    const bounded = this.requiresBoundedWindows();
+    const width = window.end.getTime() - window.start.getTime();
+    const padding = bounded
+      ? Math.max(0, Math.min(width, (26 * 3600000 - width) / 2))
+      : width;
+    return {
+      start: new Date(window.start.getTime() - padding),
+      end: new Date(window.end.getTime() + padding),
+    };
+  }
+
   public buildRecordingsWindowedQuery(window: TimelineWindow): UnifiedQuery | null {
     return this._builder.buildRecordingsQuery(this._shape.getAllCameraIDs(), {
       start: window.start,
@@ -229,7 +257,7 @@ export class TimelineDataSource {
   }
 
   private async _refreshQuery(window: TimelineWindow): Promise<void> {
-    const cacheFriendlyWindow = convertRangeToCacheFriendlyTimes(window);
+    const cacheFriendlyWindow = this.getCacheFriendlyWindow(window);
 
     if (
       this._cache.hasCoverage({
@@ -328,7 +356,7 @@ export class TimelineDataSource {
       return;
     }
 
-    const cacheFriendlyWindow = convertRangeToCacheFriendlyTimes(window);
+    const cacheFriendlyWindow = this.getCacheFriendlyWindow(window);
     const recordingQueries = this._cameraManager.generateDefaultRecordingSegmentsQueries(
       cameraIDs,
       {

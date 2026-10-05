@@ -77,6 +77,35 @@ const setup = async () => {
 };
 
 describe('Shinobi historical recording selection', () => {
+  it('selects the next contiguous file at its half-open boundary and seeks across midnight', async () => {
+    const { hass, engine, store } = await setup();
+    const before = new ShinobiRecording(
+      'camera',
+      'before',
+      'before',
+      new Date('2026-10-01T23:59:00Z'),
+      new Date('2026-10-02T00:01:00Z'),
+    );
+    const after = new ShinobiRecording(
+      'camera',
+      'after',
+      'after',
+      before.getEndTime(),
+      new Date('2026-10-02T00:03:00Z'),
+    );
+    const boundary = new Date('2026-10-02T00:01:00Z');
+    expect(findBestMediaTimeIndex([before, after], boundary)).toBe(1);
+    expect(await engine.getMediaSeekTime(hass, store, before, boundary)).toBeNull();
+    expect(await engine.getMediaSeekTime(hass, store, after, boundary)).toBe(0);
+    expect(
+      await engine.getMediaSeekTime(
+        hass,
+        store,
+        before,
+        new Date('2026-10-02T00:00:30Z'),
+      ),
+    ).toBe(90);
+  });
   it('queries a bounded window and seeks the covering original file to 60 seconds', async () => {
     const { hass, walker, engine, store, query } = await setup();
     const results = await engine.getRecordings(hass, store, query);
@@ -132,6 +161,9 @@ describe('Shinobi historical recording selection', () => {
       { media_content_id: contentID.replace('|garden|', '|foreign|') },
       { can_play: false },
       { media_content_type: 'image/jpeg' },
+      ...['', 'Infinity', 'NaN', ' 12', '0x10'].map((epoch) => ({
+        media_content_id: contentID.replace(String(start.getTime() / 1000), epoch),
+      })),
     ]) {
       walker.walk.mockResolvedValue([{ ...child, ...modification }]);
       await expect(engine.getRecordings(hass, store, query)).rejects.toThrow(
@@ -198,5 +230,25 @@ describe('Shinobi historical recording selection', () => {
         .generateMediaFromRecordings(hass, store, query, result)
         ?.map((media) => media.getID()),
     ).toEqual([`v1-${'0'.repeat(64)}`, id]);
+    const candidates = engine.generateMediaFromRecordings(hass, store, query, result);
+    if (!candidates) {
+      throw new Error('missing media');
+    }
+    expect(candidates[findBestMediaTimeIndex(candidates, start) ?? -1].getID()).toBe(
+      `v1-${'0'.repeat(64)}`,
+    );
+    walker.walk.mockResolvedValue([
+      { ...child, media_content_id: contentID.replace('a'.repeat(64), '0'.repeat(64)) },
+      child,
+    ]);
+    const reversed = (await engine.getRecordings(hass, store, query)).get(query);
+    if (!reversed) {
+      throw new Error('missing reversed results');
+    }
+    expect(
+      engine
+        .generateMediaFromRecordings(hass, store, query, reversed)
+        ?.map((media) => media.getID()),
+    ).toEqual(candidates.map((media) => media.getID()));
   });
 });

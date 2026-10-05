@@ -985,6 +985,13 @@
     "where": "Where"
   },
   "timeline": {
+    "axis_time": "Timeline timezone",
+    "recording_time": "Recording timezone",
+    "recording_gap": "No recording covers the selected time.",
+    "invalid_local_time": "Enter a valid date and time.",
+    "invalid_time_zone": "The recording timezone is invalid. Check the integration configuration.",
+    "nonexistent_local_time": "This local time does not exist because the clocks move forward. Choose another time.",
+    "select_offset": "This time occurs twice. Choose its UTC offset.",
     "select_date": "Choose date"
   }
 }

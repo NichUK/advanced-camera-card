@@ -20,6 +20,7 @@ export function renderMediaNotification(
 interface NoMediaOptions {
   cameraID: string | null;
   inProgress?: boolean;
+  recordingGap?: boolean;
 }
 
 // The viewer/gallery no-media (or awaiting-media) state.
@@ -34,7 +35,13 @@ export function renderNoMediaNotification(
     : undefined;
 
   return renderMediaNotification({
-    title: localize(options.inProgress ? 'error.awaiting_media' : 'common.no_media'),
+    title: localize(
+      options.inProgress
+        ? 'error.awaiting_media'
+        : options.recordingGap
+          ? 'timeline.recording_gap'
+          : 'common.no_media',
+    ),
     icon: 'mdi:multimedia',
     targetTitle,
     inProgress: !!options.inProgress,
