@@ -24,7 +24,8 @@ it('leaves a completed archive gap empty while retaining legacy viewer selection
   expect(getViewerMediaIndex([legacy], null)).toBe(0);
   expect(getViewerMediaIndex([clip, legacy], null)).toBe(1);
   expect(getViewerMediaIndex([legacy, clip], null)).toBe(0);
-  expect(isExactTimeGap([clip], new Date(0))).toBe(true);
+  expect(isExactTimeGap([clip], new Date(60000))).toBe(true);
+  expect(isExactTimeGap([clip], new Date(0))).toBe(false);
   expect(isExactTimeGap([clip])).toBe(false);
   expect(isExactTimeGap(null, new Date(0))).toBe(false);
   expect(isExactTimeGap([], new Date(0))).toBe(false);
