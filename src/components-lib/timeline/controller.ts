@@ -20,7 +20,10 @@ import { convertRangeToCacheFriendlyTimes } from '../../camera-manager/utils/ran
 import type { FoldersManager } from '../../card-controller/folders/manager';
 import type { ViewItemManager } from '../../card-controller/view/item-manager';
 import { MergeContextViewModifier } from '../../card-controller/view/modifiers/merge-context';
-import type { ViewManagerEpoch } from '../../card-controller/view/types';
+import type {
+  QueryExecutorOptions,
+  ViewManagerEpoch,
+} from '../../card-controller/view/types';
 import type { ConditionStateManagerReadonlyInterface } from '../../condition-trigger/conditions/types';
 import type { CameraConfig } from '../../config/schema/cameras';
 import type { AdvancedCameraCardView } from '../../config/schema/common/const';
@@ -40,7 +43,7 @@ import { ViewItemClassifier } from '../../view/item-classifier';
 import { QueryResults } from '../../view/query-results';
 import type { UnifiedQuery } from '../../view/unified-query';
 import { UnifiedQueryTransformer } from '../../view/unified-query-transformer';
-import { mergeViewContext } from '../../view/view';
+import { mergeViewContext, type View } from '../../view/view';
 import {
   canMediaBeShownAsTimelineItem,
   TimelineDataSource,
@@ -568,7 +571,7 @@ export class TimelineController {
       this._timeline
     ) {
       const query = this._source.buildRecordingsWindowedQuery(
-        convertRangeToCacheFriendlyTimes(
+        this._source.getCacheFriendlyWindow(
           this._getPrefetchWindow(this._timeline.getWindow()),
         ),
       );
@@ -677,6 +680,9 @@ export class TimelineController {
    * @returns A broader timeline.
    */
   private _getPrefetchWindow(window: TimelineWindow): TimelineWindow {
+    if (this._source) {
+      return this._source.getPrefetchWindow(window);
+    }
     const delta = differenceInSeconds(window.end, window.start);
     return {
       start: sub(window.start, { seconds: delta }),
@@ -692,7 +698,9 @@ export class TimelineController {
     window: TimelineWindow,
   ): UnifiedQuery {
     const prefetchWindow = this._getPrefetchWindow(window);
-    const cacheFriendlyWindow = convertRangeToCacheFriendlyTimes(prefetchWindow);
+    const cacheFriendlyWindow =
+      this._source?.getCacheFriendlyWindow(prefetchWindow) ??
+      convertRangeToCacheFriendlyTimes(prefetchWindow);
     return UnifiedQueryTransformer.rebuildQuery(query, {
       start: cacheFriendlyWindow.start,
       end: cacheFriendlyWindow.end,
@@ -742,18 +750,20 @@ export class TimelineController {
       params: {
         query,
       },
-      queryExecutorOptions: {
-        selectResult: {
-          id:
-            this._viewManagerEpoch?.manager
-              .getView()
-              ?.queryResults?.getSelectedResult()
-              ?.getID() ?? undefined,
-        },
-      },
+      queryExecutorOptions: this._getTimelineQueryOptions(view),
       modifiers: [new MergeContextViewModifier(this._getTimelineContext())],
     });
   };
+
+  private _getTimelineQueryOptions(view: View): QueryExecutorOptions {
+    const time = view.context?.mediaViewer?.seek;
+    return {
+      selectResult:
+        time && this._source?.requiresBoundedWindows()
+          ? { time: { time } }
+          : { id: view.queryResults?.getSelectedResult()?.getID() ?? undefined },
+    };
+  }
 
   private _alreadyHasAcceptableMediaQuery(freshQuery: UnifiedQuery): boolean {
     const view = this._viewManagerEpoch?.manager.getView();
@@ -894,19 +904,11 @@ export class TimelineController {
       freshMediaQuery &&
       !this._alreadyHasAcceptableMediaQuery(freshMediaQuery)
     ) {
-      const currentlySelectedResult = this._viewManagerEpoch?.manager
-        .getView()
-        ?.queryResults?.getSelectedResult();
-
       await this._viewManagerEpoch?.manager.setViewByParametersWithExistingQuery({
         params: {
           query: freshMediaQuery,
         },
-        queryExecutorOptions: {
-          selectResult: {
-            id: currentlySelectedResult?.getID() ?? undefined,
-          },
-        },
+        queryExecutorOptions: this._getTimelineQueryOptions(view),
         modifiers: [
           new MergeContextViewModifier(this._getTimelineContext(desiredWindow)),
         ],

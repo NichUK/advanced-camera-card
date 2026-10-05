@@ -20,4 +20,5 @@ it('leaves a completed archive gap empty while retaining legacy viewer selection
   expect(getViewerMediaIndex([clip], legacy)).toBeNull();
   expect(getViewerMediaIndex([legacy], null)).toBe(0);
   expect(getViewerMediaIndex([clip, legacy], null)).toBe(1);
+  expect(getViewerMediaIndex([legacy, clip], null)).toBe(0);
 });

@@ -12,8 +12,10 @@ export const getViewerMediaIndex = (
     return index;
   }
   // An exact archive selection can deliberately be empty inside a gap.
-  if (media.every((item) => item.requiresExactTimeSelection())) {
-    return null;
+  for (let index = media.length - 1; index >= 0; index--) {
+    if (!media[index].requiresExactTimeSelection()) {
+      return index;
+    }
   }
-  return media.length - 1;
+  return null;
 };
