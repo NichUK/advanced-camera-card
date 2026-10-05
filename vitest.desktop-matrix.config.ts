@@ -14,6 +14,7 @@ export default defineConfig({
     ...browserConfig.test,
     browser: {
       ...browserConfig.test?.browser,
+      instances: [{ browser: 'chromium' }],
       provider: playwright({ launchOptions: { channel } }),
     },
   },
