@@ -51,6 +51,7 @@ export default defineConfig({
     },
   ],
   server: {
+    ...browserConfig.server,
     host: '127.0.0.1',
     proxy: {
       '/api': {
@@ -67,6 +68,7 @@ export default defineConfig({
     include: ['tests/acceptance/*.acceptance.ts'],
     browser: {
       ...browserConfig.test?.browser,
+      instances: [{ browser: 'chromium' }],
       provider: playwright({
         launchOptions: {
           channel,

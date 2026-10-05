@@ -22,15 +22,18 @@ it.each(['automatic', 'explicit'])(
     try {
       const continuation = new RecordingContinuation(vi.fn());
       const failure = new ShinobiArchiveError('network', 'discovery');
+      const advance = vi.fn().mockResolvedValue(undefined);
+      const load = vi
+        .fn()
+        .mockRejectedValueOnce(failure)
+        .mockResolvedValue([clip(1000, 2000)]);
       await continuation.ended(
         clip(0, 1000),
         kind === 'explicit' ? [clip(3000, 4000)] : [],
         {
           now: new Date(5000),
-          load: async () => {
-            throw failure;
-          },
-          advance: vi.fn(),
+          load,
+          advance,
         },
       );
       if (kind === 'explicit') {
@@ -44,10 +47,35 @@ it.each(['automatic', 'explicit'])(
         time,
         error: { category: 'network' },
       });
-      const advance = vi.fn().mockResolvedValue(undefined);
       await continuation.continueNext(advance);
       expect(advance).toHaveBeenCalledExactlyOnceWith(time, expect.any(Function));
       expect(continuation.getState()).toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
+  },
+);
+
+it.each(['gap', 'end'])(
+  'repeats failed discovery and recovers into %s',
+  async (state) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const continuation = new RecordingContinuation(vi.fn());
+      const load = vi
+        .fn()
+        .mockRejectedValueOnce(new ShinobiArchiveError('network', 'discovery'))
+        .mockResolvedValue(state === 'gap' ? [clip(3000, 4000)] : []);
+      const advance = vi.fn();
+      await continuation.ended(clip(0, 1000), [], {
+        now: new Date(5000),
+        load,
+        advance,
+      });
+      await continuation.continueNext(advance);
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(advance).not.toHaveBeenCalled();
+      expect(continuation.getState()).toMatchObject({ state });
     } finally {
       warn.mockRestore();
     }

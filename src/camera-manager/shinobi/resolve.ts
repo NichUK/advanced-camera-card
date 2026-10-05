@@ -9,6 +9,39 @@ import { homeAssistantWSRequest } from '../../ha/ws-request';
 import { withTimeout } from '../../utils/concurrency/with-timeout';
 import { archiveError, ShinobiArchiveError } from './errors';
 
+/** One-byte authorized GET; the caller owns its deadline and cancellation. */
+export async function preflightShinobiMedia(
+  url: string,
+  abort: AbortController,
+  stage: 'resolve' | 'playback',
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+      signal: abort.signal,
+      redirect: 'error',
+      cache: 'no-store',
+    });
+  } catch {
+    throw new ShinobiArchiveError('network', stage);
+  }
+  abort.abort();
+  if (!response.ok) {
+    throw new ShinobiArchiveError(
+      response.status === 401
+        ? 'authentication'
+        : response.status === 403
+          ? 'denied'
+          : response.status === 404 || response.status === 410
+            ? 'unavailable'
+            : 'network',
+      stage,
+    );
+  }
+}
+
 /** A fresh HA resolve renews authorization; signed recording URLs are not cached. */
 export async function resolveShinobiMedia(
   hass: HomeAssistant,
@@ -30,35 +63,11 @@ export async function resolveShinobiMedia(
         ) {
           throw new ShinobiArchiveError('metadata', 'resolve');
         }
-        let response: Response;
-        try {
-          response = await fetch(canonicalizeHAURL(hass, resolved.url), {
-            // HA authenticates signed requests only for GET. A one-byte Range
-            // probes the authorized original relay without downloading a clip.
-            method: 'GET',
-            headers: { Range: 'bytes=0-0' },
-            signal: abort.signal,
-            redirect: 'error',
-            cache: 'no-store',
-          });
-        } catch {
-          throw new ShinobiArchiveError('network', 'resolve');
-        }
-        // Stop the response body immediately after its headers, including when
-        // an upstream server ignores Range and returns the entire file.
-        abort.abort();
-        if (!response.ok) {
-          throw new ShinobiArchiveError(
-            response.status === 401
-              ? 'authentication'
-              : response.status === 403
-                ? 'denied'
-                : response.status === 404 || response.status === 410
-                  ? 'unavailable'
-                  : 'network',
-            'resolve',
-          );
-        }
+        await preflightShinobiMedia(
+          canonicalizeHAURL(hass, resolved.url),
+          abort,
+          'resolve',
+        );
         return resolved;
       })(),
       10000,
