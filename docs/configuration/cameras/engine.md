@@ -2,6 +2,10 @@
 
 ## Overview
 
+Preview engines are excluded from the stable capability matrix below. The
+`shinobi` preview's current capability set is described here and must not be
+interpreted as stable release support.
+
 The `shinobi` preview engine uses the original `shinobi_recordings` Home Assistant
 adapter. Set `camera_entity` to its archive camera, and either select `engine:
 shinobi` or use automatic detection. The legacy `shinobi` integration is not
