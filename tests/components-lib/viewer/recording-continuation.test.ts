@@ -158,6 +158,60 @@ it('leaves legacy and incomplete identities alone', async () => {
   expect(continuation.getState()).toBeNull();
 });
 
+it.each(['discovery', 'advance'])(
+  'logs a redacted %s failure category without retaining an upstream secret',
+  async (stage) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const continuation = new RecordingContinuation(vi.fn());
+      await continuation.ended(
+        clip(0, 1000),
+        stage === 'advance' ? [clip(1000, 2000)] : [],
+        {
+          now: new Date(5000),
+          load: async () => {
+            throw new Error('SECRET upstream URL');
+          },
+          advance: async () => {
+            throw new Error('SECRET upstream URL');
+          },
+        },
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Recording continuation failed' }),
+        { stage, reason: 'request_failed' },
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('SECRET');
+    } finally {
+      warn.mockRestore();
+    }
+  },
+);
+
+it('categorizes a timed-out explicit continuation', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.useFakeTimers();
+  try {
+    const continuation = new RecordingContinuation(vi.fn());
+    await continuation.ended(clip(0, 1000), [clip(3000, 4000)], {
+      now: new Date(5000),
+      load: vi.fn(),
+      advance: vi.fn(),
+    });
+    const work = continuation.continueNext(() => new Promise(() => {}));
+    await vi.advanceTimersByTimeAsync(10000);
+    await work;
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Recording continuation failed' }),
+      { stage: 'advance', reason: 'timeout' },
+    );
+    expect(continuation.getState()).toEqual({ state: 'error' });
+  } finally {
+    vi.useRealTimers();
+    warn.mockRestore();
+  }
+});
+
 it('loads an adjacent file and exposes explicit continuation only at a confirmed gap', async () => {
   const continuation = new RecordingContinuation(vi.fn());
   const advance = vi.fn().mockResolvedValue(undefined);

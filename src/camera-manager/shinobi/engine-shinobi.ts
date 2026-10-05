@@ -1,3 +1,5 @@
+import PQueue from 'p-queue';
+
 import { LRUCache } from '../../cache/lru';
 import type { CameraConfig } from '../../config/schema/cameras';
 import type { HomeAssistant } from '../../ha/types';
@@ -30,6 +32,18 @@ interface ShinobiRecordingResults extends RecordingQueryResults {
 }
 
 export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
+  private async _mapCameras<T>(
+    cameraIDs: Set<string>,
+    work: (cameraID: string) => Promise<T>,
+  ): Promise<T[]> {
+    // A single valid query may contain more cameras than the transport bound.
+    const queue = new PQueue({ concurrency: 16 });
+    return Promise.all(
+      Array.from(cameraIDs, (cameraID) =>
+        queue.add(() => work(cameraID), { throwOnTimeout: true }),
+      ),
+    );
+  }
   private _windows = new LRUCache<
     string,
     {
@@ -105,30 +119,28 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
     engineOptions?: EngineOptions,
   ): Promise<RecordingSegmentsQueryResultsMap> {
     const output: RecordingSegmentsQueryResultsMap = new Map();
-    await Promise.all(
-      Array.from(query.cameraIDs, async (cameraID) => {
-        const scopedQuery = { ...query, cameraIDs: new Set([cameraID]) };
-        const recordings = await this._loadRecordings(
-          hass,
-          store,
-          {
-            ...scopedQuery,
-            source: QuerySource.Camera,
-            type: QueryType.Recording,
-          },
-          engineOptions,
-        );
-        output.set(scopedQuery, {
-          engine: Engine.Shinobi,
-          type: QueryResultsType.RecordingSegments,
-          segments: recordings.map((recording) => ({
-            id: recording.getID(),
-            start_time: recording.getStartTime().getTime() / 1000,
-            end_time: recording.getEndTime().getTime() / 1000,
-          })),
-        });
-      }),
-    );
+    await this._mapCameras(query.cameraIDs, async (cameraID) => {
+      const scopedQuery = { ...query, cameraIDs: new Set([cameraID]) };
+      const recordings = await this._loadRecordings(
+        hass,
+        store,
+        {
+          ...scopedQuery,
+          source: QuerySource.Camera,
+          type: QueryType.Recording,
+        },
+        engineOptions,
+      );
+      output.set(scopedQuery, {
+        engine: Engine.Shinobi,
+        type: QueryResultsType.RecordingSegments,
+        segments: recordings.map((recording) => ({
+          id: recording.getID(),
+          start_time: recording.getStartTime().getTime() / 1000,
+          end_time: recording.getEndTime().getTime() / 1000,
+        })),
+      });
+    });
     return output;
   }
 
@@ -163,23 +175,21 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
     ) {
       throw new ShinobiArchiveError('metadata', 'discovery');
     }
-    const batches = await Promise.all(
-      Array.from(query.cameraIDs, async (cameraID) => {
-        const camera = store.getCamera(cameraID);
-        const archive = camera instanceof ShinobiCamera ? camera.getArchive() : null;
-        if (!archive) {
-          throw new ShinobiArchiveError('metadata', 'discovery');
-        }
-        return this._getCameraRecordings(
-          hass,
-          cameraID,
-          archive,
-          start,
-          end,
-          engineOptions?.useCache ?? true,
-        );
-      }),
-    );
+    const batches = await this._mapCameras(query.cameraIDs, async (cameraID) => {
+      const camera = store.getCamera(cameraID);
+      const archive = camera instanceof ShinobiCamera ? camera.getArchive() : null;
+      if (!archive) {
+        throw new ShinobiArchiveError('metadata', 'discovery');
+      }
+      return this._getCameraRecordings(
+        hass,
+        cameraID,
+        archive,
+        start,
+        end,
+        engineOptions?.useCache ?? true,
+      );
+    });
     const media = batches.flat();
     media.sort(
       (a, b) =>

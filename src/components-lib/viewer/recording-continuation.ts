@@ -1,7 +1,11 @@
+import { AdvancedCameraCardError } from '../../types';
 import { errorToConsole } from '../../utils/basic';
 import { withTimeout } from '../../utils/concurrency/with-timeout';
 import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index';
 import type { ViewMedia } from '../../view/item';
+
+const CONTINUATION_TIMEOUT_MS = 10000;
+const CONTINUATION_WINDOW_MS = 26 * 3600000;
 
 export type RecordingContinuationState =
   | { state: 'loading' }
@@ -41,20 +45,26 @@ export class RecordingContinuation {
     const epoch = ++this._epoch;
     this._state = { state: 'loading' };
     this._changed();
+    const timeoutError = new Error('Recording continuation timeout');
     try {
       await withTimeout(
         advance(next, () => epoch === this._epoch),
-        10000,
-        new Error('Recording continuation timeout'),
+        CONTINUATION_TIMEOUT_MS,
+        timeoutError,
       );
       if (epoch === this._epoch) {
         this._state = null;
         this._changed();
       }
-    } catch {
+    } catch (error) {
       if (epoch === this._epoch) {
         this._epoch++;
-        errorToConsole(new Error('Recording continuation failed'));
+        errorToConsole(
+          new AdvancedCameraCardError('Recording continuation failed', {
+            stage: 'advance',
+            reason: error === timeoutError ? 'timeout' : 'request_failed',
+          }),
+        );
         this._state = { state: 'error' };
         this._changed();
       }
@@ -105,6 +115,8 @@ export class RecordingContinuation {
       }
       return false;
     };
+    const timeoutError = new Error('Recording continuation timeout');
+    let stage = 'discovery';
     try {
       const work = async (): Promise<void> => {
         if (!current()) {
@@ -114,7 +126,7 @@ export class RecordingContinuation {
         let start = boundary;
         while (!covered && this._state?.state !== 'gap' && start < options.now) {
           const end = new Date(
-            Math.min(start.getTime() + 26 * 3600000, options.now.getTime()),
+            Math.min(start.getTime() + CONTINUATION_WINDOW_MS, options.now.getTime()),
           );
           const media = await options.load(start, end);
           if (!current()) {
@@ -127,6 +139,7 @@ export class RecordingContinuation {
           start = end;
         }
         if (covered) {
+          stage = 'advance';
           await options.advance(boundary, current);
           if (!current()) {
             return;
@@ -136,13 +149,18 @@ export class RecordingContinuation {
           this._state = { state: 'end' };
         }
       };
-      await withTimeout(work(), 10000, new Error('Recording continuation timeout'));
+      await withTimeout(work(), CONTINUATION_TIMEOUT_MS, timeoutError);
       if (current()) {
         this._changed();
       }
-    } catch {
+    } catch (error) {
       if (current()) {
-        errorToConsole(new Error('Recording continuation failed'));
+        errorToConsole(
+          new AdvancedCameraCardError('Recording continuation failed', {
+            stage,
+            reason: error === timeoutError ? 'timeout' : 'request_failed',
+          }),
+        );
         // Invalidate remaining work, including a load that outlives its deadline.
         this._epoch++;
         this._state = { state: 'error' };

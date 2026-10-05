@@ -923,8 +923,8 @@ export class TimelineController {
       // (via fetchIfNecessary) may update the timeline contents which causes
       // the visjs timeline to stop dragging/panning operations which is very
       // disruptive to the user.
-      await this._refreshSource(prefetchedWindow);
       this._source.addMediaToDataset(view.query, view.queryResults?.getResults());
+      await this._refreshSource(prefetchedWindow);
     }
 
     // A metadata response started before the date picker moved must not reset
