@@ -115,16 +115,10 @@ it('shows deleted media promptly, stops automatic retries, and explicitly renews
   await card.clickControl('Media unavailable');
   await card.clickControl('Retry');
   await expect
-    .poll(
-      () => ({
-        ready: deepQuery<HTMLVideoElement>(card.card, 'video')?.readyState,
-        error: deepQuery<HTMLVideoElement>(card.card, 'video')?.error?.code,
-        requests: getTestMediaRequestCount(url),
-        resolves: resolves(),
-      }),
-      { timeout: 5000 },
-    )
-    .toMatchObject({ ready: expect.any(Number) });
+    .poll(() => deepQuery<HTMLVideoElement>(card.card, 'video')?.videoWidth, {
+      timeout: 5000,
+    })
+    .toBe(3840);
   await card.events.waitForFirst('advanced-camera-card:media:loaded');
   expect(resolves()).toBeGreaterThanOrEqual(2);
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(requested);
@@ -136,16 +130,10 @@ it('recovers from a temporary server failure without changing the historical ins
   const { card, resolves } = await mount(url);
   await card.events.waitForFirst('advanced-camera-card:issue:trigger');
   await expect
-    .poll(
-      () => ({
-        ready: deepQuery<HTMLVideoElement>(card.card, 'video')?.readyState,
-        error: deepQuery<HTMLVideoElement>(card.card, 'video')?.error?.code,
-        requests: getTestMediaRequestCount(url),
-        resolves: resolves(),
-      }),
-      { timeout: 5000 },
-    )
-    .toMatchObject({ ready: expect.any(Number) });
+    .poll(() => deepQuery<HTMLVideoElement>(card.card, 'video')?.videoWidth, {
+      timeout: 5000,
+    })
+    .toBe(3840);
   await card.events.waitForFirst('advanced-camera-card:media:loaded');
   expect(resolves()).toBeGreaterThanOrEqual(2);
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
