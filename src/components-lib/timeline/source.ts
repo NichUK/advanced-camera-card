@@ -293,6 +293,9 @@ export class TimelineDataSource {
       return;
     }
     this.addMediaToDataset(query, media);
+    if (this.requiresBoundedWindows()) {
+      this._pruneDataset(window);
+    }
     this._cache.add({
       ...cacheFriendlyWindow,
       expires: add(new Date(), { seconds: TIMELINE_FRESHNESS_TOLERANCE_SECONDS }),
@@ -308,23 +311,37 @@ export class TimelineDataSource {
       this._recordingRanges.clear();
     }
     try {
-      const work = Promise.all([
-        this._refreshQuery(window, epoch),
-        ...(this._showRecordings ? [this._refreshRecordings(window, epoch)] : []),
-      ]);
-      if (bounded) {
-        await withTimeout(work, 10000, new Error('Recording metadata timeout'));
+      const queryWork = this._refreshQuery(window, epoch);
+      if (bounded && this._showRecordings) {
+        // Ancillary events/thumbnails cannot invalidate verified recording
+        // coverage or hold its loading state behind an unrelated stalled query.
+        void withTimeout(
+          queryWork,
+          10000,
+          new Error('Timeline ancillary timeout'),
+        ).catch(() => {
+          if (epoch === this._refreshEpoch) {
+            errorToConsole(new Error('Timeline ancillary metadata unavailable'));
+          }
+        });
+        await withTimeout(
+          this._refreshRecordings(window, epoch),
+          10000,
+          new Error('Recording metadata timeout'),
+        );
       } else {
-        await work;
+        const work = Promise.all([
+          queryWork,
+          ...(this._showRecordings ? [this._refreshRecordings(window, epoch)] : []),
+        ]);
+        if (bounded) {
+          await withTimeout(work, 10000, new Error('Recording metadata timeout'));
+        } else {
+          await work;
+        }
       }
       if (bounded && epoch === this._refreshEpoch) {
-        this._dataset.remove(
-          this._dataset.get({
-            filter: (item) =>
-              item.start >= window.end.getTime() ||
-              (item.end ?? item.start) < window.start.getTime(),
-          }),
-        );
+        this._pruneDataset(window);
         this._coverage = this._showRecordings ? { window, state: 'complete' } : null;
       }
     } catch (e) {
@@ -340,6 +357,16 @@ export class TimelineDataSource {
         errorToConsole(e);
       }
     }
+  }
+
+  private _pruneDataset(window: TimelineWindow): void {
+    this._dataset.remove(
+      this._dataset.get({
+        filter: (item) =>
+          item.start >= window.end.getTime() ||
+          (item.end ?? item.start) < window.start.getTime(),
+      }),
+    );
   }
 
   private async _refreshRecordings(

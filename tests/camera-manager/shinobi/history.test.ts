@@ -78,6 +78,38 @@ const setup = async () => {
 };
 
 describe('Shinobi historical recording selection', () => {
+  it.each(['recordings', 'segments'])(
+    'starts both camera %s lookups before either completes',
+    async (kind) => {
+      const { hass, walker, engine, store, query } = await setup();
+      store.addCamera(
+        await engine.createCamera(
+          createCameraConfig({ id: 'second', camera_entity: 'camera.archive' }),
+        ),
+      );
+      let finish: (() => void) | undefined;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      walker.walk.mockImplementation(async () => {
+        await pending;
+        return [child];
+      });
+      const multi = { ...query, cameraIDs: new Set(['archive', 'second']) };
+      const result =
+        kind === 'recordings'
+          ? engine.getRecordings(hass, store, multi)
+          : engine.getRecordingSegments(hass, store, {
+              ...multi,
+              type: QueryType.RecordingSegments,
+            });
+      expect(walker.walk).toHaveBeenCalledTimes(2);
+      assert(finish);
+      finish();
+      const results = await result;
+      expect(results.size).toBe(kind === 'recordings' ? 1 : 2);
+    },
+  );
   it('exposes quiet recording segments within a required viewport without inventing events', async () => {
     const { hass, walker, engine, store, query } = await setup();
     expect(

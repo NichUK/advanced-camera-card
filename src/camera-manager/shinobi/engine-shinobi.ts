@@ -105,28 +105,30 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
     engineOptions?: EngineOptions,
   ): Promise<RecordingSegmentsQueryResultsMap> {
     const output: RecordingSegmentsQueryResultsMap = new Map();
-    for (const cameraID of query.cameraIDs) {
-      const scopedQuery = { ...query, cameraIDs: new Set([cameraID]) };
-      const recordings = await this._loadRecordings(
-        hass,
-        store,
-        {
-          ...scopedQuery,
-          source: QuerySource.Camera,
-          type: QueryType.Recording,
-        },
-        engineOptions,
-      );
-      output.set(scopedQuery, {
-        engine: Engine.Shinobi,
-        type: QueryResultsType.RecordingSegments,
-        segments: recordings.map((recording) => ({
-          id: recording.getID(),
-          start_time: recording.getStartTime().getTime() / 1000,
-          end_time: recording.getEndTime().getTime() / 1000,
-        })),
-      });
-    }
+    await Promise.all(
+      Array.from(query.cameraIDs, async (cameraID) => {
+        const scopedQuery = { ...query, cameraIDs: new Set([cameraID]) };
+        const recordings = await this._loadRecordings(
+          hass,
+          store,
+          {
+            ...scopedQuery,
+            source: QuerySource.Camera,
+            type: QueryType.Recording,
+          },
+          engineOptions,
+        );
+        output.set(scopedQuery, {
+          engine: Engine.Shinobi,
+          type: QueryResultsType.RecordingSegments,
+          segments: recordings.map((recording) => ({
+            id: recording.getID(),
+            start_time: recording.getStartTime().getTime() / 1000,
+            end_time: recording.getEndTime().getTime() / 1000,
+          })),
+        });
+      }),
+    );
     return output;
   }
 
@@ -161,24 +163,24 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
     ) {
       throw new AdvancedCameraCardError('Invalid recording interval');
     }
-    const media: ShinobiRecording[] = [];
-    for (const cameraID of query.cameraIDs) {
-      const camera = store.getCamera(cameraID);
-      const archive = camera instanceof ShinobiCamera ? camera.getArchive() : null;
-      if (!archive) {
-        throw new AdvancedCameraCardError('Shinobi recording camera unavailable');
-      }
-      media.push(
-        ...(await this._getCameraRecordings(
+    const batches = await Promise.all(
+      Array.from(query.cameraIDs, async (cameraID) => {
+        const camera = store.getCamera(cameraID);
+        const archive = camera instanceof ShinobiCamera ? camera.getArchive() : null;
+        if (!archive) {
+          throw new AdvancedCameraCardError('Shinobi recording camera unavailable');
+        }
+        return this._getCameraRecordings(
           hass,
           cameraID,
           archive,
           start,
           end,
           engineOptions?.useCache ?? true,
-        )),
-      );
-    }
+        );
+      }),
+    );
+    const media = batches.flat();
     media.sort(
       (a, b) =>
         a.getStartTime().getTime() - b.getStartTime().getTime() ||
