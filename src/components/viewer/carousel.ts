@@ -12,15 +12,15 @@ import { keyed } from 'lit/directives/keyed.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import type { CameraManager } from '../../camera-manager/manager.js';
-import { MergeContextViewModifier } from '../../card-controller/view/modifiers/merge-context';
+import { MergeContextViewModifier } from '../../card-controller/view/modifiers/merge-context.js';
 import { RemoveContextPropertyViewModifier } from '../../card-controller/view/modifiers/remove-context-property.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
 import { resolveAutoHideState } from '../../components-lib/auto-hide.js';
 import { MediaActionsController } from '../../components-lib/media-actions-controller.js';
 import { MediaHeightController } from '../../components-lib/media-height-controller.js';
 import { MediaLoadedInfoSinkController } from '../../components-lib/media-loaded-info-sink-controller.js';
-import { RecordingContinuation } from '../../components-lib/viewer/recording-continuation';
-import { getViewerMediaIndex } from '../../components-lib/viewer/selection';
+import { RecordingContinuation } from '../../components-lib/viewer/recording-continuation.js';
+import { getViewerMediaIndex } from '../../components-lib/viewer/selection.js';
 import type { TransitionEffect } from '../../config/schema/common/transition-effect.js';
 import { configDefaults, type CardWideConfig } from '../../config/schema/types.js';
 import type { ViewerConfig } from '../../config/schema/viewer.js';
@@ -34,11 +34,11 @@ import viewerCarouselStyle from '../../scss/viewer-carousel.scss?inline';
 import { stopEventFromActivatingCardWideActions } from '../../utils/action.js';
 import { contentsChanged } from '../../utils/basic.js';
 import type { CarouselSelected } from '../../utils/embla/carousel-controller.js';
-import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index';
+import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index.js';
 import { getTextDirection } from '../../utils/text-direction.js';
 import { ViewItemClassifier } from '../../view/item-classifier.js';
 import type { ViewMedia } from '../../view/item.js';
-import { QueryResults } from '../../view/query-results';
+import { QueryResults } from '../../view/query-results.js';
 import { UnifiedQuery } from '../../view/unified-query';
 
 import '../carousel';
@@ -396,8 +396,10 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
     if (!state) {
       return null;
     }
-    return html`<div class="recording-continuation" role="status" aria-live="polite">
-      ${localize(`media_viewer.continuation_${state.state}`)}
+    return html`<div class="recording-continuation">
+      <span role="status" aria-live="polite"
+        >${localize(`media_viewer.continuation_${state.state}`)}</span
+      >
       ${state.state === 'gap'
         ? html`<button
             @click=${() => {
