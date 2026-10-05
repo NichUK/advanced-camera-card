@@ -90,7 +90,13 @@ const mount = async (
       cameras: [{ camera_entity: 'camera.archive', engine: 'shinobi' }],
       view: { default: 'timeline' },
       timeline: { show_recordings: true },
-      media_viewer: { controls: { timeline: { mode: 'below', show_recordings: true } } },
+      media_viewer: {
+        controls: {
+          // This fixture has no thumbnails; keep the drawer out of the pointer journey.
+          thumbnails: { mode: 'none' },
+          timeline: { mode: 'below', show_recordings: true },
+        },
+      },
     },
     hass,
     { toleratedConsoleErrors: [RESIZE_LOOP_CONSOLE_ERROR] },
@@ -232,7 +238,9 @@ it.each(['pause', 'seek', 'dispose'])(
       } else {
         // Manual selection may rebuild the player; its selected file must
         // remain the manually chosen first clip after old work is released.
-        expect(video(card)?.currentSrc).toContain('v1-' + '0'.repeat(64));
+        await expect
+          .poll(() => video(card)?.currentSrc)
+          .toContain('v1-' + '0'.repeat(64));
       }
     } else {
       expect(card.card.isConnected).toBe(false);
