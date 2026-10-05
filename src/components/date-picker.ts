@@ -43,7 +43,7 @@ export class AdvancedCameraCardDatePicker extends LitElement {
   private _refInput: Ref<HTMLInputElement> = createRef();
 
   get value(): Date | null {
-    if (this.timeZone) {
+    if (this.timeZone !== undefined) {
       return this._selectedDate;
     }
     return this._refInput.value?.value ? new Date(this._refInput.value.value) : null;
@@ -68,7 +68,7 @@ export class AdvancedCameraCardDatePicker extends LitElement {
     const changed = () => {
       const value = this._refInput.value?.value;
 
-      if (this.timeZone && value) {
+      if (this.timeZone !== undefined && value) {
         const result = resolveZonedLocalTime(value, this.timeZone);
         this._candidates = result.candidates;
         this._error = result.error ? localize(`timeline.${result.error}`) : null;
@@ -81,7 +81,12 @@ export class AdvancedCameraCardDatePicker extends LitElement {
       }
 
       fireAdvancedCameraCardEvent<DatePickerEvent>(this, 'date-picker:change', {
-        date: this.timeZone ? this._selectedDate : value ? new Date(value) : null,
+        date:
+          this.timeZone !== undefined
+            ? this._selectedDate
+            : value
+              ? new Date(value)
+              : null,
       });
     };
 
@@ -103,7 +108,7 @@ export class AdvancedCameraCardDatePicker extends LitElement {
         }}
       >
       </advanced-camera-card-icon>
-      ${this.timeZone
+      ${this.timeZone !== undefined
         ? html`<span class="time-zone"
               >${localize('timeline.recording_time')}: ${this.timeZone}</span
             >
