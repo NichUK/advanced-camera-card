@@ -1,4 +1,4 @@
-import { assert, expect, it } from 'vitest';
+import { assert, expect, it, vi } from 'vitest';
 
 import '../../../src/components/timeline';
 import '../../../src/components/video-player';
@@ -188,11 +188,21 @@ it('reports unsupported archive video when only its audio track can decode', asy
           ?.shadowRoot?.textContent,
     )
     .toContain('does not support');
-  const video = deepQuery<HTMLVideoElement>(card.card, 'video');
-  assert(video);
-  expect(video.videoWidth).toBe(0);
-  expect(video.paused).toBe(true);
+  await expect
+    .poll(() => getBlockNotificationText(card.card))
+    .toContain('does not support');
+  expect(deepQuery<HTMLVideoElement>(card.card, 'video')).toBeNull();
   expect(performance.now() - began).toBeLessThanOrEqual(10000);
+  vi.useFakeTimers({
+    toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+  });
+  try {
+    await vi.advanceTimersByTimeAsync(31000);
+    expect(getBlockNotificationText(card.card)).toContain('does not support');
+    expect(deepQuery<HTMLVideoElement>(card.card, 'video')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('measures twenty categorized HTTP failures through the rendered archive viewer', async ({
@@ -227,7 +237,7 @@ it('measures twenty categorized HTTP failures through the rendered archive viewe
       p95: observations.map((row) => row.milliseconds).sort((a, b) => a - b)[18],
       browser: navigator.userAgent,
       boundary:
-        'HA resolve + service-worker HTTP HEAD status + rendered failure; synthetic media',
+        'HA resolve + service-worker HTTP GET Range status + rendered failure; synthetic media',
     },
   });
 });

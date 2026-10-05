@@ -14,6 +14,7 @@ import type { CameraManager } from '../../camera-manager/manager.js';
 import { ShinobiArchiveError } from '../../camera-manager/shinobi/errors.js';
 import { resolveShinobiMedia } from '../../camera-manager/shinobi/resolve.js';
 import { QueryType } from '../../camera-manager/types.js';
+import type { IssueTriggerEventData } from '../../card-controller/issues/types.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
 import { LazyLoadController } from '../../components-lib/lazy-load-controller.js';
 import { MediaPlayerLivenessDetector } from '../../components-lib/live/liveness/detectors/media-player-liveness.js';
@@ -93,6 +94,29 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
   private _refProvider: Ref<MediaPlayerElement> = createRef();
   private _lazyLoadController: LazyLoadController = new LazyLoadController(this);
   private _archiveLiveness: MediaPlayerLivenessDetector | null = null;
+  private _archiveFailure: { contentID: string; description: string } | null = null;
+
+  private _getArchiveFailure(): string | null {
+    return this._archiveFailure?.contentID === this.media?.getContentID()
+      ? this._archiveFailure?.description ?? null
+      : null;
+  }
+
+  private _handleArchiveIssue(event: CustomEvent<IssueTriggerEventData>): void {
+    const context = event.detail;
+    const contentID = this.media?.getContentID();
+    if (
+      this.media?.requiresExactTimeSelection() &&
+      contentID &&
+      context.key === 'media_unavailable' &&
+      context.targetID === this.media.getID() &&
+      (context.reason === 'unsupported' || context.reason === 'server_error') &&
+      context.description
+    ) {
+      this._archiveFailure = { contentID, description: context.description };
+      this.requestUpdate();
+    }
+  }
 
   public disconnectedCallback(): void {
     this._archiveLiveness?.unsubscribe();
@@ -148,7 +172,9 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
     new MediaLoadWatchdogController(this, {
       getTargetID: () => this.media?.getID() ?? null,
       isLoadExpected: () =>
-        this._shouldLoad() && !this._resolvedMediaController.getError(),
+        this._shouldLoad() &&
+        !this._resolvedMediaController.getError() &&
+        !this._getArchiveFailure(),
     });
   }
 
@@ -190,6 +216,9 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
   }
 
   protected willUpdate(changedProps: PropertyValues): void {
+    if (changedProps.has('media') && !this._getArchiveFailure()) {
+      this._archiveFailure = null;
+    }
     if (changedProps.has('media') && this._archiveLiveness) {
       this._archiveLiveness.unsubscribe();
       this._archiveLiveness = null;
@@ -241,6 +270,7 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
     const view = this.viewManagerEpoch?.manager.getView();
 
     const intermediateTemplate = html` <advanced-camera-card-media-dimensions-container
+      @advanced-camera-card:issue:trigger=${this._handleArchiveIssue}
       .dimensionsConfig=${this._getRelevantCameraConfig()?.dimensions}
     >
       ${template}
@@ -282,6 +312,10 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
       return;
     }
 
+    const archiveFailure = this._getArchiveFailure();
+    if (archiveFailure) {
+      return renderNotificationBlockFromText(archiveFailure);
+    }
     const resolutionError = this._resolvedMediaController.getError();
     if (resolutionError instanceof ShinobiArchiveError) {
       return renderNotificationBlockFromText(resolutionError.message);
