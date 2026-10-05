@@ -1,6 +1,7 @@
 import { ViewMedia, ViewMediaType, type RecordingViewMedia } from '../../view/item';
 
 export class ShinobiRecording extends ViewMedia implements RecordingViewMedia {
+  private readonly _downloadEnabled: boolean;
   private readonly _contentID: string;
   private readonly _id: string;
   private readonly _start: Date;
@@ -8,12 +9,24 @@ export class ShinobiRecording extends ViewMedia implements RecordingViewMedia {
   public override requiresExactTimeSelection(): boolean {
     return true;
   }
-  constructor(cameraID: string, contentID: string, id: string, start: Date, end: Date) {
+  constructor(
+    cameraID: string,
+    contentID: string,
+    id: string,
+    start: Date,
+    end: Date,
+    downloadEnabled = false,
+  ) {
     super(ViewMediaType.Recording, { cameraID });
+    this._downloadEnabled = downloadEnabled;
     this._contentID = contentID;
     this._id = id;
     this._start = start;
     this._end = end;
+  }
+
+  public isDownloadEnabled(): boolean {
+    return this._downloadEnabled;
   }
 
   public override getID(): string {

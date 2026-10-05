@@ -2,8 +2,10 @@ import PQueue from 'p-queue';
 
 import { LRUCache } from '../../cache/lru';
 import type { CameraConfig } from '../../config/schema/cameras';
+import { canonicalizeHAURL } from '../../ha/canonical-url';
 import type { HomeAssistant } from '../../ha/types';
 import { QuerySource } from '../../query-source';
+import type { Endpoint } from '../../types';
 import { withTimeout } from '../../utils/concurrency/with-timeout';
 import type { ViewMedia } from '../../view/item';
 import type { ViewItemCapabilities } from '../../view/types';
@@ -25,6 +27,7 @@ import {
 import { ShinobiCamera } from './camera';
 import { archiveError, ShinobiArchiveError } from './errors';
 import { ShinobiRecording } from './media';
+import { resolveShinobiMedia } from './resolve';
 import { clipIdentifierSchema, type ArchiveIdentity } from './types';
 
 interface ShinobiRecordingResults extends RecordingQueryResults {
@@ -79,8 +82,30 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
     });
   }
 
-  public override getMediaCapabilities(): ViewItemCapabilities {
-    return { canFavorite: false, canDownload: false };
+  public override getMediaCapabilities(media?: ViewMedia): ViewItemCapabilities {
+    return {
+      canFavorite: false,
+      canDownload: media instanceof ShinobiRecording && media.isDownloadEnabled(),
+    };
+  }
+
+  public override async getMediaDownloadPath(
+    hass: HomeAssistant,
+    _cameraConfig: CameraConfig,
+    media: ViewMedia,
+  ): Promise<Endpoint | null> {
+    if (!(media instanceof ShinobiRecording) || !media.isDownloadEnabled()) {
+      return null;
+    }
+    const contentID = media.getContentID();
+    if (!clipIdentifierSchema.safeParse(contentID.split('|')).success) {
+      throw new ShinobiArchiveError('metadata', 'resolve');
+    }
+    const resolved = await resolveShinobiMedia(
+      hass,
+      contentID.replace('/clip|', '/download|'),
+    );
+    return { endpoint: canonicalizeHAURL(hass, resolved.url) };
   }
 
   public override generateDefaultRecordingQuery(
@@ -306,6 +331,7 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
           id,
           new Date(begin * 1000),
           new Date(finish * 1000),
+          archive.shinobi_recordings_download ?? false,
         ),
       );
     }

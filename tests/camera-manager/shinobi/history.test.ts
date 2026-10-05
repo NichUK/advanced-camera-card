@@ -38,12 +38,15 @@ const child = {
   can_expand: false,
   thumbnail: null,
 };
-const setup = async () => {
+const setup = async (downloadEnabled?: boolean) => {
   const hass = createHASS({
     'camera.archive': createStateEntity({
       attributes: {
         shinobi_recordings_entry: 'preview',
         shinobi_recordings_monitor: 'garden',
+        ...(downloadEnabled !== undefined && {
+          shinobi_recordings_download: downloadEnabled,
+        }),
       },
     }),
   });
@@ -532,3 +535,15 @@ describe('Shinobi historical recording selection', () => {
     ).toEqual(candidates.map((media) => media.getID()));
   });
 });
+
+it.each([true, false, undefined])(
+  'propagates only validated adapter download support (%s) to discovered media',
+  async (enabled) => {
+    const { hass, engine, store, query } = await setup(enabled);
+    const result = (await engine.getRecordings(hass, store, query)).get(query);
+    assert(result);
+    const media = engine.generateMediaFromRecordings(hass, store, query, result);
+    assert(media);
+    expect(engine.getMediaCapabilities(media[0]).canDownload).toBe(enabled ?? false);
+  },
+);
