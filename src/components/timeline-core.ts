@@ -204,7 +204,7 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
       ${ref(this._refTimeline)}
     >
       <div
-        class=${this._controller.getDatePickerTimeZone()
+        class=${this._controller.getDatePickerTimeZone() !== null
           ? 'timeline-tools zoned'
           : 'timeline-tools'}
       >

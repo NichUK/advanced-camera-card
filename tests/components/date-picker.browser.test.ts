@@ -25,6 +25,20 @@ const enter = async (picker: AdvancedCameraCardDatePicker, value: string) => {
   await picker.updateComplete;
 };
 
+it('rejects a provided empty timezone without emitting a browser-local seek', async () => {
+  const picker = await mount();
+  picker.timeZone = '';
+  await picker.updateComplete;
+  const selected: DatePickerEvent[] = [];
+  picker.addEventListener('advanced-camera-card:date-picker:change', (event) =>
+    selected.push((event as CustomEvent<DatePickerEvent>).detail),
+  );
+  await enter(picker, '2026-10-02T14:35');
+  expect(picker.value).toBeNull();
+  expect(picker.shadowRoot?.textContent).toContain('recording timezone is invalid');
+  expect(selected.map((event) => event.date)).toEqual([null]);
+});
+
 it('shows the recording timezone and selects the exact UTC instant', async () => {
   const picker = await mount();
   await enter(picker, '2026-10-02T14:35');
