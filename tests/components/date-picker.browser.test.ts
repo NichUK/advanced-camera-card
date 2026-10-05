@@ -25,6 +25,13 @@ const enter = async (picker: AdvancedCameraCardDatePicker, value: string) => {
   await picker.updateComplete;
 };
 
+it('selects seconds inside an original recording using the configured site zone', async () => {
+  const picker = await mount();
+  expect(picker.shadowRoot?.querySelector('input')?.step).toBe('1');
+  await enter(picker, '2026-10-02T14:35:07');
+  expect(picker.value?.toISOString()).toBe('2026-10-02T12:35:07.000Z');
+});
+
 it('rejects a provided empty timezone without emitting a browser-local seek', async () => {
   const picker = await mount();
   picker.timeZone = '';
