@@ -1,6 +1,7 @@
 import { assert, expect, it } from 'vitest';
 
 import '../../../src/components/timeline';
+import '../../../src/components/video-player';
 
 import type { AdvancedCameraCardTimelineCore } from '../../../src/components/timeline-core';
 import { deepQuery, deepQueryAll } from '../../browser/dom';
@@ -18,6 +19,26 @@ import {
 } from '../../browser/test-utils';
 
 useTestMedia();
+
+it('releases archive transport on disconnect and reloads a reconnected player', async () => {
+  const player = document.createElement('advanced-camera-card-video-player');
+  player.archive = true;
+  player.targetID = 'archive';
+  player.url = createFixtureURL('shinobi-4k-h264.mp4');
+  document.body.append(player);
+  await expect
+    .poll(() => player.shadowRoot?.querySelector('video')?.videoWidth)
+    .toBe(3840);
+  const video = player.shadowRoot?.querySelector('video');
+  assert(video);
+  player.remove();
+  expect(video.querySelector('source')?.getAttribute('src')).toBeNull();
+  expect(video.readyState).toBe(0);
+  expect(video.paused).toBe(true);
+  document.body.append(player);
+  await expect.poll(() => video.videoWidth).toBe(3840);
+  player.remove();
+});
 const start = new Date('2026-10-02T12:34:00Z');
 const contentID = `media-source://shinobi_recordings/clip|preview|garden|v1-${'a'.repeat(64)}|${start.getTime() / 1000}|${start.getTime() / 1000 + 120}`;
 const current = (card: MountedCard) =>

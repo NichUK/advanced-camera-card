@@ -1,12 +1,13 @@
 import {
   html,
   LitElement,
+  nothing,
   unsafeCSS,
   type CSSResultGroup,
   type TemplateResult,
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
+import { live } from 'lit/directives/live.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import { ShinobiArchiveError } from '../camera-manager/shinobi/errors.js';
@@ -74,6 +75,22 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
     return this._mediaPlayerController;
   }
 
+  public connectedCallback(): void {
+    super.connectedCallback();
+    this.requestUpdate();
+  }
+
+  public disconnectedCallback(): void {
+    super.disconnectedCallback();
+    const video = this._refVideo.value;
+    if (this.archive && video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.querySelector('source')?.removeAttribute('src');
+      video.load();
+    }
+  }
+
   protected render(): TemplateResult | void {
     return html`
       <video
@@ -130,7 +147,7 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
         @error=${() => this._archiveError()}
       >
         <source
-          src="${ifDefined(this.url)}"
+          src=${live(this.url ?? nothing)}
           type="video/mp4"
           @error=${() => this._archiveError()}
         />
