@@ -94,6 +94,7 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
   private _refProvider: Ref<MediaPlayerElement> = createRef();
   private _lazyLoadController: LazyLoadController = new LazyLoadController(this);
   private _archiveLiveness: MediaPlayerLivenessDetector | null = null;
+  private _archiveLivenessContentID: string | null = null;
   private _archiveFailure: { contentID: string; description: string } | null = null;
 
   private _getArchiveFailure(): string | null {
@@ -219,11 +220,16 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
     if (changedProps.has('media') && !this._getArchiveFailure()) {
       this._archiveFailure = null;
     }
-    if (changedProps.has('media') && this._archiveLiveness) {
+    if (
+      changedProps.has('media') &&
+      this._archiveLiveness &&
+      this._archiveLivenessContentID !== this.media?.getContentID()
+    ) {
       this._archiveLiveness.unsubscribe();
       this._archiveLiveness = null;
     }
     if (this.media?.requiresExactTimeSelection() && !this._archiveLiveness) {
+      this._archiveLivenessContentID = this.media.getContentID();
       this._archiveLiveness = new MediaPlayerLivenessDetector(this, () => {
         const targetID = this.media?.getID();
         const verdict = this._archiveLiveness?.getVerdict();
