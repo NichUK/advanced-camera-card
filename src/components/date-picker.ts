@@ -101,6 +101,7 @@ export class AdvancedCameraCardDatePicker extends LitElement {
         title="${localize('timeline.select_date')}"
         ${ref(this._refInput)}
         type="datetime-local"
+        step=${this.timeZone !== undefined ? 1 : 60}
         @input=${() => changed()}
         @change=${() => changed()}
       />

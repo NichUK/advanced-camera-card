@@ -3,6 +3,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveZonedLocalTime } from '../../src/utils/zoned-local-time';
 
 describe('explicit timezone date selection', () => {
+  it('resolves seconds inside a recording while retaining explicit DST decisions', () => {
+    expect(
+      resolveZonedLocalTime(
+        '2026-10-02T14:35:07',
+        'Europe/Paris',
+      ).candidates[0].date.toISOString(),
+    ).toBe('2026-10-02T12:35:07.000Z');
+    expect(resolveZonedLocalTime('2026-03-29T02:30:07', 'Europe/Paris').error).toBe(
+      'nonexistent_local_time',
+    );
+    expect(
+      resolveZonedLocalTime('2026-10-25T02:30:07', 'Europe/Paris').candidates.map(
+        (item) => item.date.toISOString(),
+      ),
+    ).toEqual(['2026-10-25T00:30:07.000Z', '2026-10-25T01:30:07.000Z']);
+    expect(resolveZonedLocalTime('2026-10-02T14:35:99', 'Europe/Paris').error).toBe(
+      'invalid_local_time',
+    );
+  });
   it('does not hide unexpected formatter failures', () => {
     const failure = new Error('unexpected formatter failure');
     const formatter = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function () {
