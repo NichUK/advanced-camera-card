@@ -20,6 +20,7 @@ export class RecordingContinuation {
   private _source: ViewMedia | null = null;
   private _state: RecordingContinuationState | null = null;
   private _changed: () => void;
+  private _retryDiscovery: (() => Promise<void>) | null = null;
 
   constructor(changed: () => void) {
     this._changed = changed;
@@ -33,12 +34,17 @@ export class RecordingContinuation {
     this._epoch++;
     this._source = null;
     this._state = null;
+    this._retryDiscovery = null;
     this._changed();
   }
 
   public async continueNext(
     advance: (time: Date, current: () => boolean) => Promise<void>,
   ): Promise<void> {
+    if (this._state?.state === 'error' && this._retryDiscovery) {
+      await this._retryDiscovery();
+      return;
+    }
     if (this._state?.state !== 'gap' && this._state?.state !== 'error') {
       return;
     }
@@ -94,6 +100,7 @@ export class RecordingContinuation {
       return;
     }
     this._source = source;
+    this._retryDiscovery = null;
     const epoch = ++this._epoch;
     this._state = { state: 'loading' };
     this._changed();
@@ -168,6 +175,12 @@ export class RecordingContinuation {
         );
         // Invalidate remaining work, including a load that outlives its deadline.
         this._epoch++;
+        if (stage === 'discovery') {
+          this._retryDiscovery = async () => {
+            this._source = null;
+            await this.ended(source, known, options);
+          };
+        }
         this._state = { state: 'error', time: boundary, error: failure };
         this._changed();
       }

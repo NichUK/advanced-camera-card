@@ -3,7 +3,10 @@ import { assert, expect, it, vi } from 'vitest';
 import '../../../src/components/timeline';
 import '../../../src/components/video-player';
 
+import { ShinobiRecording } from '../../../src/camera-manager/shinobi/media';
+import { VideoMediaPlayerController } from '../../../src/components-lib/media-player/video';
 import type { AdvancedCameraCardTimelineCore } from '../../../src/components/timeline-core';
+import type { AdvancedCameraCardViewerProvider } from '../../../src/components/viewer/provider';
 import { deepQuery, deepQueryAll } from '../../browser/dom';
 import { FakeHASS } from '../../browser/fake-hass';
 import { createFixtureURL } from '../../browser/fixtures';
@@ -25,6 +28,8 @@ it('releases archive transport on disconnect and reloads a reconnected player', 
   player.archive = true;
   player.targetID = 'archive';
   player.url = createFixtureURL('shinobi-4k-h264.mp4');
+  const loaded = vi.fn();
+  player.addEventListener('advanced-camera-card:media:loaded', loaded);
   document.body.append(player);
   await expect
     .poll(() => player.shadowRoot?.querySelector('video')?.videoWidth)
@@ -36,8 +41,11 @@ it('releases archive transport on disconnect and reloads a reconnected player', 
   await expect.poll(() => video.querySelector('source')?.getAttribute('src')).toBeNull();
   expect(video.readyState).toBe(0);
   expect(video.paused).toBe(true);
+  loaded.mockClear();
   document.body.append(player);
+  expect(loaded).not.toHaveBeenCalled();
   await expect.poll(() => video.videoWidth).toBe(3840);
+  await expect.poll(() => loaded.mock.calls.length).toBe(1);
   player.remove();
 });
 const start = new Date('2026-10-02T12:34:00Z');
@@ -120,6 +128,50 @@ const mount = async (url: string, retrySeconds = 0.1) => {
   return { card, began, resolves: () => resolves };
 };
 
+it('keeps monitoring a loaded player after same-content metadata revalidation', async () => {
+  const playback: { callback: ((live: boolean) => void) | null } = { callback: null };
+  const subscription = vi
+    .spyOn(VideoMediaPlayerController.prototype, 'subscribeLiveness')
+    .mockImplementation((callback) => {
+      playback.callback = callback;
+      return () => {
+        playback.callback = null;
+      };
+    });
+  try {
+    const { card } = await mount(createFixtureURL('shinobi-4k-h264.mp4'), 0);
+    await card.events.waitForFirst('advanced-camera-card:media:loaded');
+    await expect.poll(() => playback.callback !== null).toBe(true);
+    const provider = deepQuery<AdvancedCameraCardViewerProvider>(
+      card.card,
+      'advanced-camera-card-viewer-provider',
+    );
+    assert(provider);
+    const old = provider.media;
+    assert(old instanceof ShinobiRecording);
+    const camera = old.getCameraID();
+    assert(camera);
+    provider.media = new ShinobiRecording(
+      camera,
+      old.getContentID(),
+      old.getID(),
+      old.getStartTime(),
+      old.getEndTime(),
+    );
+    await provider.updateComplete;
+    assert(playback.callback);
+    playback.callback(false);
+    const failure = await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+    expect(failure.detail).toMatchObject({
+      key: 'media_unavailable',
+      reason: 'stalled',
+    });
+    await card.clickControl('Media unavailable');
+  } finally {
+    subscription.mockRestore();
+  }
+});
+
 it('shows deleted media promptly, stops automatic retries, and explicitly renews HA access', async () => {
   const url = createTestMediaURL([404, 200], true, 'shinobi-4k-h264.mp4');
   const { card, began, resolves } = await mount(url);
@@ -160,6 +212,19 @@ it('recovers from a temporary server failure without changing the historical ins
   expect(resolves()).toBeGreaterThanOrEqual(2);
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
   expect(current(card)?.view).toBe('media');
+});
+
+it('recovers when the MP4 fails after its successful authorization preflight', async () => {
+  const url = createTestMediaURL([200, 503, 503, 200], true, 'shinobi-4k-h264.mp4');
+  const { card, resolves } = await mount(url);
+  await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  await expect
+    .poll(() => deepQuery<HTMLVideoElement>(card.card, 'video')?.videoWidth, {
+      timeout: 5000,
+    })
+    .toBe(3840);
+  expect(resolves()).toBeGreaterThanOrEqual(2);
+  expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
 
 it('reports a native unsupported media error instead of leaving the spinner', async () => {
