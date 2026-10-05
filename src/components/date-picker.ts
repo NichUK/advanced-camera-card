@@ -60,7 +60,13 @@ export class AdvancedCameraCardDatePicker extends LitElement {
 
   protected willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('timeZone')) {
+      const hadInput = Boolean(this._refInput.value?.value);
       this.reset();
+      if (hadInput) {
+        fireAdvancedCameraCardEvent<DatePickerEvent>(this, 'date-picker:change', {
+          date: null,
+        });
+      }
     }
   }
 
