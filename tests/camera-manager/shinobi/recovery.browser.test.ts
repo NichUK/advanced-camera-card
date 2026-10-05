@@ -155,6 +155,24 @@ it('reports a native unsupported media error instead of leaving the spinner', as
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
 
+it('reports unsupported archive video when only its audio track can decode', async () => {
+  const { card, began } = await mount(createFixtureURL('shinobi-audio-only.mp4'));
+  await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  await card.clickControl('Media unavailable');
+  await expect
+    .poll(
+      () =>
+        deepQuery<HTMLElement>(card.card, 'advanced-camera-card-notification')
+          ?.shadowRoot?.textContent,
+    )
+    .toContain('does not support');
+  const video = deepQuery<HTMLVideoElement>(card.card, 'video');
+  assert(video);
+  expect(video.videoWidth).toBe(0);
+  expect(video.paused).toBe(true);
+  expect(performance.now() - began).toBeLessThanOrEqual(10000);
+});
+
 it('measures twenty categorized HTTP failures through the rendered archive viewer', async ({
   task,
 }) => {

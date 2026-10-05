@@ -92,6 +92,17 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
           }
         }}
         @loadeddata="${(ev: Event) => {
+          if (
+            this.archive &&
+            ev.target instanceof HTMLVideoElement &&
+            (!ev.target.videoWidth || !ev.target.videoHeight)
+          ) {
+            // A supported audio track can hide an unsupported video codec:
+            // native playback advances without an error or a visible frame.
+            ev.target.pause();
+            this._archiveError();
+            return;
+          }
           const info = createMediaLoadedInfo(ev, {
             ...(this._mediaPlayerController && {
               mediaPlayerController: this._mediaPlayerController,
