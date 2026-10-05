@@ -203,7 +203,8 @@ it('meets the first decoded frame budget in twenty cold and twenty warm runs', a
   annotate,
   task,
 }) => {
-  task.meta['performance'] = [];
+  const measurements: unknown[] = [];
+  Object.assign(task.meta, { performance: measurements });
   for (const mode of ['cold', 'warm'] as const) {
     expect(timings[mode]).toHaveLength(20);
     const sorted = [...timings[mode]].sort((a, b) => a - b);
@@ -217,8 +218,6 @@ it('meets the first decoded frame budget in twenty cold and twenty warm runs', a
       browser: navigator.userAgent,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
-    const measurements = task.meta['performance'];
-    assert(Array.isArray(measurements));
     measurements.push(measurement);
     await annotate(`Shinobi historical playback: ${mode}`, 'performance', {
       contentType: 'application/json',
