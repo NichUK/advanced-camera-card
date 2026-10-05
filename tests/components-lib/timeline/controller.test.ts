@@ -1,9 +1,12 @@
 import { add } from 'date-fns';
 import { LitElement } from 'lit';
+import { DataSet } from 'vis-data';
 import type { TimelineEventPropertiesResult, TimelineWindow } from 'vis-timeline';
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 
+import type { CameraManagerEngine } from '../../../src/camera-manager/engine';
+import { Engine } from '../../../src/camera-manager/types';
 import type { FoldersManager } from '../../../src/card-controller/folders/manager';
 import type {
   ViewManagerEpoch,
@@ -78,6 +81,7 @@ const createHarness = async (options?: {
   mini?: boolean;
   style?: 'ribbon' | 'stack';
   showRecordings?: boolean;
+  bounded?: boolean;
 }): Promise<TestHarness> => {
   stubMatchMedia().mockReturnValue({ matches: true });
 
@@ -100,7 +104,11 @@ const createHarness = async (options?: {
     return timeline;
   });
 
-  const cameraManager = createCameraManager(createStore([{ cameraID: CAMERA_ID }]));
+  const engine = mock<CameraManagerEngine>();
+  engine.getEngineType.mockReturnValue(Engine.Shinobi);
+  const cameraManager = createCameraManager(
+    createStore([{ cameraID: CAMERA_ID, ...(options?.bounded && { engine }) }]),
+  );
   vi.mocked(cameraManager.getCameraMetadata).mockReturnValue({
     title: 'Camera Title',
     icon: { icon: 'mdi:camera' },
@@ -189,6 +197,25 @@ const dragTimeline = (harness: TestHarness, pointerTime: Date): void => {
 
 // @vitest-environment jsdom
 describe('TimelineController', () => {
+  it('prunes broader view events after adding them to a bounded viewport', async () => {
+    const farStart = add(WINDOW.start, { days: 7 });
+    await createHarness({
+      bounded: true,
+      media: [
+        createReviewMedia(),
+        createReviewMedia({
+          id: 'far',
+          startTime: farStart,
+          endTime: add(farStart, { minutes: 1 }),
+        }),
+      ],
+    });
+    const dataset = timelineConstructor.mock.calls[0]?.[1];
+    assert(dataset instanceof DataSet);
+    expect(dataset.getIds()).toContain('review-1');
+    expect(dataset.get('far')).toBeNull();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

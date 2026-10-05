@@ -79,6 +79,51 @@ const setup = async () => {
 
 describe('Shinobi historical recording selection', () => {
   it.each(['recordings', 'segments'])(
+    'queues a 33-camera %s query within the 16-request transport bound',
+    async (kind) => {
+      const { hass, walker, engine, store, query } = await setup();
+      const cameraIDs = new Set<string>();
+      for (let i = 0; i < 33; i++) {
+        const id = `archive-${i}`;
+        cameraIDs.add(id);
+        store.addCamera(
+          await engine.createCamera(
+            createCameraConfig({ id, camera_entity: 'camera.archive' }),
+          ),
+        );
+      }
+      let finish: (() => void) | undefined;
+      const barrier = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      let active = 0,
+        maximum = 0;
+      walker.walk.mockImplementation(async () => {
+        active++;
+        maximum = Math.max(maximum, active);
+        await barrier;
+        active--;
+        return [child];
+      });
+      const multi = { ...query, cameraIDs };
+      const result =
+        kind === 'recordings'
+          ? engine.getRecordings(hass, store, multi, { useCache: false })
+          : engine.getRecordingSegments(
+              hass,
+              store,
+              { ...multi, type: QueryType.RecordingSegments },
+              { useCache: false },
+            );
+      expect(walker.walk).toHaveBeenCalledTimes(16);
+      assert(finish);
+      finish();
+      expect((await result).size).toBe(kind === 'recordings' ? 1 : 33);
+      expect(walker.walk).toHaveBeenCalledTimes(33);
+      expect(maximum).toBe(16);
+    },
+  );
+  it.each(['recordings', 'segments'])(
     'starts both camera %s lookups before either completes',
     async (kind) => {
       const { hass, walker, engine, store, query } = await setup();
