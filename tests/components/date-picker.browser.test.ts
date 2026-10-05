@@ -97,9 +97,14 @@ it.each(['America/New_York', undefined])(
     select.value = String(new Date('2026-10-25T01:30:00Z').getTime());
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(picker.value).not.toBeNull();
+    const changes: DatePickerEvent[] = [];
+    picker.addEventListener('advanced-camera-card:date-picker:change', (event) => {
+      changes.push((event as CustomEvent<DatePickerEvent>).detail);
+    });
     picker.timeZone = zone;
     await picker.updateComplete;
     expect(picker.value).toBeNull();
+    expect(changes).toEqual([{ date: null }]);
     expect(picker.shadowRoot?.querySelector('input')?.value).toBe('');
     expect(picker.shadowRoot?.querySelector('select')).toBeNull();
     expect(picker.shadowRoot?.querySelector('[role="alert"]')).toBeNull();
