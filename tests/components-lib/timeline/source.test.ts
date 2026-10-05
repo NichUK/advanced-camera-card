@@ -37,6 +37,7 @@ import {
 } from '../../../src/components-lib/timeline/source';
 import type { ConditionStateManagerReadonlyInterface } from '../../../src/condition-trigger/conditions/types';
 import { QuerySource } from '../../../src/query-source';
+import { arrayify } from '../../../src/utils/basic';
 import { ViewMediaType } from '../../../src/view/item';
 import { UnifiedQuery, type QueryNode } from '../../../src/view/unified-query';
 import { createCameraManager, createStore } from '../../camera-manager/test-utils';
@@ -175,6 +176,76 @@ describe('TimelineDataSource', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  it.each(['failure', 'timeout', 'stale-failure'])(
+    'keeps verified quiet coverage independent of ancillary %s',
+    async (mode) => {
+      const manager = createTestCameraManager();
+      const engine = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+      assert(engine);
+      vi.spyOn(engine, 'getEngineType').mockReturnValue(Engine.Shinobi);
+      vi.mocked(manager.getRecordingSegments).mockImplementation(
+        async (queries) =>
+          new Map([
+            [
+              arrayify(queries)[0],
+              {
+                engine: Engine.Shinobi,
+                type: QueryResultsType.RecordingSegments,
+                segments: [
+                  {
+                    id: 'quiet',
+                    start_time: start.getTime() / 1000,
+                    end_time: end.getTime() / 1000,
+                  },
+                ],
+              },
+            ],
+          ]),
+      );
+      const source = createSource(
+        manager,
+        mock<FoldersManager>(),
+        mock<ConditionStateManagerReadonlyInterface>(),
+        cameraEventsQuery,
+        true,
+      );
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      let fail: ((error: Error) => void) | undefined;
+      const pending = new Promise<never>((_resolve, reject) => {
+        fail = reject;
+      });
+      vi.mocked(manager.executeMediaQueries)
+        .mockReturnValueOnce(pending)
+        .mockResolvedValue([]);
+      vi.useFakeTimers();
+      try {
+        await source.refresh({ start, end });
+        expect(source.getRecordingCoverageState()?.state).toBe('complete');
+        expect(
+          source.dataset.get({ filter: (item) => item.type === 'background' }),
+        ).toHaveLength(1);
+        if (mode === 'stale-failure') {
+          await source.refresh({ start, end });
+        }
+        if (mode === 'timeout') {
+          await vi.advanceTimersByTimeAsync(10000);
+        } else {
+          assert(fail);
+          fail(new Error('Ancillary unavailable'));
+          await vi.advanceTimersByTimeAsync(1);
+        }
+        expect(source.getRecordingCoverageState()?.state).toBe('complete');
+        expect(
+          source.dataset.get({ filter: (item) => item.type === 'background' }),
+        ).toHaveLength(1);
+        expect(warn).toHaveBeenCalledTimes(mode === 'stale-failure' ? 0 : 1);
+      } finally {
+        vi.useRealTimers();
+        warn.mockRestore();
+      }
+    },
+  );
 
   it('shows exact quiet coverage, keeps gaps open and ignores a delayed old viewport', async () => {
     const cameraManager = createTestCameraManager();
