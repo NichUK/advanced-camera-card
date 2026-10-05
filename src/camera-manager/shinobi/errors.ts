@@ -17,7 +17,10 @@ export class ShinobiArchiveError extends AdvancedCameraCardError {
   public readonly category: ShinobiFailure;
   public readonly retryable: boolean;
 
-  constructor(category: ShinobiFailure, stage: 'discovery' | 'resolve' | 'playback') {
+  constructor(
+    category: ShinobiFailure,
+    stage: 'discovery' | 'resolve' | 'playback' | 'continuation',
+  ) {
     super(localize(`shinobi.errors.${category}`), { category, stage });
     this.category = category;
     this.retryable = category === 'network' || category === 'timeout';
@@ -30,7 +33,7 @@ const contextSchema = z.object({ response: errorCodeSchema });
 /** Recognize stable HA adapter codes; never retain upstream text or URLs. */
 export function archiveError(
   error: unknown,
-  stage: 'discovery' | 'resolve',
+  stage: 'discovery' | 'resolve' | 'continuation',
 ): ShinobiArchiveError {
   if (error instanceof ShinobiArchiveError) {
     return error;
@@ -64,7 +67,9 @@ export function archiveError(
     error.message === localize('error.failed_response') &&
     !response?.code;
   return new ShinobiArchiveError(
-    categories[code] ?? (transportFailed ? 'network' : 'metadata'),
+    (Object.prototype.hasOwnProperty.call(categories, code)
+      ? categories[code]
+      : undefined) ?? (transportFailed ? 'network' : 'metadata'),
     stage,
   );
 }

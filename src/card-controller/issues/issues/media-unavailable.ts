@@ -66,6 +66,7 @@ interface TargetError {
   // across repeat reports of the same failure, and refreshed when a rebuild
   // starts a new attempt.
   rebuildNotBefore: Date;
+  attempting?: boolean;
 }
 
 // The per-cause presentation (localization key + icon) and handling, shared by
@@ -160,7 +161,7 @@ export class MediaUnavailableIssue implements Issue {
       description: context.description,
       automaticRetry: context.automaticRetry,
       rebuildNotBefore:
-        existing?.reason === context.reason
+        existing?.reason === context.reason && !existing.attempting
           ? existing.rebuildNotBefore
           : this._getRebuildDeadline(context.reason),
     });
@@ -315,7 +316,10 @@ export class MediaUnavailableIssue implements Issue {
     }
 
     for (const error of retryTargets.values()) {
-      error.rebuildNotBefore = this._getRebuildDeadline(error.reason);
+      // Keep the old failure visible while allowing the replacement to load.
+      // A failure from that replacement resets this hold in trigger().
+      error.attempting = true;
+      error.rebuildNotBefore = this._getRebuildDeadline('not_loading');
     }
 
     // Intentionally keep _erroredTargets in place. The issue stays visible

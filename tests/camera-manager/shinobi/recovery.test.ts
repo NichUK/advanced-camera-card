@@ -26,6 +26,8 @@ it('maps only known server categories without retaining secret-bearing context',
     upstream_unavailable: 'network',
     upstream_http_failure: 'network',
     unknown: 'metadata',
+    constructor: 'metadata',
+    toString: 'metadata',
   })) {
     for (const value of [
       { code, message: 'SECRET' },

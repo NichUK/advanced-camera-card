@@ -1,3 +1,4 @@
+import { archiveError, ShinobiArchiveError } from '../../camera-manager/shinobi/errors';
 import { AdvancedCameraCardError } from '../../types';
 import { errorToConsole } from '../../utils/basic';
 import { withTimeout } from '../../utils/concurrency/with-timeout';
@@ -11,7 +12,7 @@ export type RecordingContinuationState =
   | { state: 'loading' }
   | { state: 'gap'; next: Date }
   | { state: 'end' }
-  | { state: 'error' };
+  | { state: 'error'; time: Date; error: ShinobiArchiveError };
 
 /** Original-file continuation: a gap always requires an explicit operator action. */
 export class RecordingContinuation {
@@ -38,14 +39,14 @@ export class RecordingContinuation {
   public async continueNext(
     advance: (time: Date, current: () => boolean) => Promise<void>,
   ): Promise<void> {
-    if (this._state?.state !== 'gap') {
+    if (this._state?.state !== 'gap' && this._state?.state !== 'error') {
       return;
     }
-    const next = this._state.next;
+    const next = this._state.state === 'gap' ? this._state.next : this._state.time;
     const epoch = ++this._epoch;
     this._state = { state: 'loading' };
     this._changed();
-    const timeoutError = new Error('Recording continuation timeout');
+    const timeoutError = new ShinobiArchiveError('timeout', 'continuation');
     try {
       await withTimeout(
         advance(next, () => epoch === this._epoch),
@@ -59,13 +60,15 @@ export class RecordingContinuation {
     } catch (error) {
       if (epoch === this._epoch) {
         this._epoch++;
+        const failure = archiveError(error, 'continuation');
         errorToConsole(
           new AdvancedCameraCardError('Recording continuation failed', {
             stage: 'advance',
             reason: error === timeoutError ? 'timeout' : 'request_failed',
+            category: failure.category,
           }),
         );
-        this._state = { state: 'error' };
+        this._state = { state: 'error', time: next, error: failure };
         this._changed();
       }
     }
@@ -115,7 +118,7 @@ export class RecordingContinuation {
       }
       return false;
     };
-    const timeoutError = new Error('Recording continuation timeout');
+    const timeoutError = new ShinobiArchiveError('timeout', 'continuation');
     let stage = 'discovery';
     try {
       const work = async (): Promise<void> => {
@@ -155,15 +158,17 @@ export class RecordingContinuation {
       }
     } catch (error) {
       if (current()) {
+        const failure = archiveError(error, 'continuation');
         errorToConsole(
           new AdvancedCameraCardError('Recording continuation failed', {
             stage,
             reason: error === timeoutError ? 'timeout' : 'request_failed',
+            category: failure.category,
           }),
         );
         // Invalidate remaining work, including a load that outlives its deadline.
         this._epoch++;
-        this._state = { state: 'error' };
+        this._state = { state: 'error', time: boundary, error: failure };
         this._changed();
       }
     }
