@@ -142,6 +142,13 @@ const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement
 
 const timings = { cold: [] as number[], warm: [] as number[] };
 for (const mode of ['cold', 'warm'] as const) {
+  if (mode === 'warm') {
+    it('primes the exact warm media cache key before collecting measurements', async () => {
+      const card = await mount(createFixtureURL('shinobi-4k-h264.mp4'));
+      await choose(card, new Date('2026-10-02T12:35:00Z'));
+      await waitForSelectedFrame(card);
+    });
+  }
   it.each(Array.from({ length: 20 }, (_, index) => index))(
     `selects and decodes a historical 4K frame (${mode} run %i)`,
     async (index) => {

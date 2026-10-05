@@ -427,8 +427,8 @@ describe('TimelineController', () => {
         .mocked(harness.manager.setViewWithMergedContext)
         .mock.calls.at(-1)?.[0];
       expect(selectedContext?.timeline?.window).toEqual({
-        start: add(chosen, { hours: -12 }),
-        end: add(chosen, { hours: 12 }),
+        start: add(chosen, { minutes: -30 }),
+        end: add(chosen, { minutes: 30 }),
       });
       vi.mocked(harness.timeline.getWindow).mockReturnValue(WINDOW);
       const current = harness.manager.getView();

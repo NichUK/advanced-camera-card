@@ -26,6 +26,43 @@ import { createPopulatedAPI } from './test-utils';
 
 describe('ViewQueryExecutor', () => {
   describe('getExistingQueryModifiers', () => {
+    it('selects covering footage independently for every exact-time camera slice', async () => {
+      const api = createPopulatedAPI();
+      const executor = new ViewQueryExecutor(api);
+      const start = new Date('2026-10-02T12:34:00Z');
+      const end = new Date('2026-10-02T12:36:00Z');
+      const a = new ShinobiRecording('a', 'a', 'clip-a', start, end);
+      const b = new ShinobiRecording('b', 'b', 'clip-b', start, end);
+      const gap = new ShinobiRecording(
+        'gap',
+        'gap',
+        'gap-clip',
+        new Date('2026-10-02T12:00:00Z'),
+        start,
+      );
+      vi.mocked(api.getCameraManager().executeMediaQueries).mockResolvedValue([
+        a,
+        b,
+        gap,
+      ]);
+      const query = new UnifiedQuery();
+      query.addNode({
+        source: QuerySource.Camera,
+        type: QueryType.Recording,
+        cameraIDs: new Set(['a', 'b', 'gap']),
+      });
+      const view = new View({ view: 'recording', camera: 'a', query });
+      applyViewModifiers(
+        view,
+        await executor.getExistingQueryModifiers(view, {
+          selectResult: { time: { time: start } },
+        }),
+      );
+      expect(view.queryResults?.getSelectedResult('a')).toBe(a);
+      expect(view.queryResults?.getSelectedResult('b')).toBe(b);
+      expect(view.queryResults?.getSelectedResult('gap')).toBeNull();
+      expect(view.queryResults?.getSelectedResult()).toBe(a);
+    });
     it('leaves exact archive gaps unselected and selects only a covering file', async () => {
       const api = createPopulatedAPI();
       const executor = new ViewQueryExecutor(api);

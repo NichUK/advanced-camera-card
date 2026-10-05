@@ -269,8 +269,11 @@ export class TimelineController {
     const window = this._timeline.getWindow();
     const width = window.end.getTime() - window.start.getTime();
     const halfWidth =
-      (this._source?.requiresBoundedWindows() ? Math.min(width, 24 * 3600000) : width) /
-      2;
+      (this._source?.requiresBoundedWindows()
+        ? width > 24 * 3600000
+          ? Math.min(this._getConfiguredWindowSeconds() * 1000, 24 * 3600000)
+          : width
+        : width) / 2;
     const selectedWindow = {
       start: new Date(date.getTime() - halfWidth),
       end: new Date(date.getTime() + halfWidth),
