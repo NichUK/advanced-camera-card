@@ -3,6 +3,7 @@ import {
   LitElement,
   unsafeCSS,
   type CSSResultGroup,
+  type PropertyValues,
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -54,6 +55,12 @@ export class AdvancedCameraCardDatePicker extends LitElement {
     this._selectedDate = null;
     if (this._refInput.value) {
       this._refInput.value.value = '';
+    }
+  }
+
+  protected willUpdate(changedProperties: PropertyValues): void {
+    if (changedProperties.has('timeZone')) {
+      this.reset();
     }
   }
 

@@ -286,8 +286,10 @@ export class ViewQueryExecutor {
     } else if (timeSelection) {
       // Exact archive selections must leave gaps empty instead of retaining
       // the default newest recording.
+      let exactSelection = false;
       for (const item of queryResults.getResults()) {
         if (item instanceof ViewMedia && item.requiresExactTimeSelection()) {
+          exactSelection = true;
           queryResults.resetSelectedResult();
           const cameraID = item.getCameraID();
           if (cameraID) {
@@ -295,12 +297,14 @@ export class ViewQueryExecutor {
           }
         }
       }
-      queryResults.selectBestResult((itemArray) =>
-        findBestMediaTimeIndex(
-          itemArray,
-          timeSelection.time,
-          timeSelection.favorCameraID,
-        ),
+      queryResults.selectBestResult(
+        (itemArray) =>
+          findBestMediaTimeIndex(
+            itemArray,
+            timeSelection.time,
+            timeSelection.favorCameraID,
+          ),
+        exactSelection ? { main: true, allCameras: true } : undefined,
       );
     }
 

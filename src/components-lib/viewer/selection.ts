@@ -6,7 +6,8 @@ export const isExactTimeGap = (
 ): boolean =>
   !!target &&
   !!media?.length &&
-  media.every((item) => item.requiresExactTimeSelection());
+  media.every((item) => item.requiresExactTimeSelection()) &&
+  !media.some((item) => item.includesTime(target));
 
 export const getViewerMediaIndex = (
   media: readonly ViewMedia[] | null,

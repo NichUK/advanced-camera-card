@@ -72,3 +72,22 @@ it('requires an explicit UTC offset before selecting the repeated hour', async (
   select.dispatchEvent(new Event('change', { bubbles: true }));
   expect(picker.value?.toISOString()).toBe('2026-10-25T00:30:00.000Z');
 });
+
+it.each(['America/New_York', undefined])(
+  'clears old candidates and selected instants when timezone changes to %s',
+  async (zone) => {
+    const picker = await mount();
+    await enter(picker, '2026-10-25T02:30');
+    const select = picker.shadowRoot?.querySelector('select');
+    assert(select);
+    select.value = String(new Date('2026-10-25T01:30:00Z').getTime());
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(picker.value).not.toBeNull();
+    picker.timeZone = zone;
+    await picker.updateComplete;
+    expect(picker.value).toBeNull();
+    expect(picker.shadowRoot?.querySelector('input')?.value).toBe('');
+    expect(picker.shadowRoot?.querySelector('select')).toBeNull();
+    expect(picker.shadowRoot?.querySelector('[role="alert"]')).toBeNull();
+  },
+);
