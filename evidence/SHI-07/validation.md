@@ -1,0 +1,13 @@
+# Recording coverage timeline
+
+Date: 2026-10-05. Implementation checkpoint; ordered review/device gates remain open.
+
+Quiet recordings use the existing recording-segment interface and appear as continuous background coverage. Shinobi gaps retain every positive gap (zero compression tolerance); other engines retain their existing tolerance. Loading, checked coverage and unavailable metadata have distinct labelled states. Clicking actual rendered coverage selects and decodes the covering file. Native earlier/later/zoom buttons support touch and keyboard focus; viewport changes preserve playback selection.
+
+Metadata is limited to the viewport with prefetch capped at 26 hours. The initial temporary fit uses the configured one-hour window. A thirty-second LRU retains at most eight completed windows, coalesces identical pending requests and reuses contained completed windows. At most sixteen distinct pending requests are admitted, each with a ten-second deadline. Late or failed results cannot replace newer coverage; expired requests release admission slots. Source ranges/items are replaced/pruned to the current window. No thumbnail requests or detection markers stand in for recordings.
+
+Validation: 7,465 unit tests in 439 files pass with required 100% statements/branches/functions/lines. TypeScript, lint and production build pass. All 200 rendered Chromium browser tests in 28 files pass. Unit regressions exercise cache expiry/admission/late completion, quiet gaps, stale panning, metadata errors and disabled shading. Browser acceptance verifies actual quiet-coverage clicks and twenty focused Enter-key viewport changes across 20,160 synthetic one-minute clips spanning fourteen days. The dedicated idle performance run measured viewport p95 36.8 ms; four bounded metadata calls benefited from overlap caching. Raw twenty observations and query bounds are in viewport-timings.json.
+
+Environment and synthetic H.264 3840x2160 fixture are unchanged from SHI-05. This measures synthetic metadata plus actual browser MP4 transport/decoding, not live HA/NVR latency or Clear HEVC support. Physical iPhone touch, actual Clear playback and ordered current-head delivery review remain open. Production services and recordings are unchanged.
+
+Reproduce: corepack yarn@4.9.1 coverage, typecheck, lint and build; set VITEST_BROWSER=chromium and run test:browser. Dedicated performance filter: tests/camera-manager/shinobi/history.browser.test.ts with --testNamePattern keyboard viewport and JSON reporter; viewportPerformance is recorded in test metadata.
