@@ -81,7 +81,12 @@ it('renews through HA resolve and checks signed media without sharing a cached U
   expect(hass.callWS).toHaveBeenCalledTimes(2);
   expect(fetch).toHaveBeenCalledWith(
     'https://ha.example/api/archive?authSig=PRIVATE',
-    expect.objectContaining({ method: 'HEAD', redirect: 'error', cache: 'no-store' }),
+    expect.objectContaining({
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+      redirect: 'error',
+      cache: 'no-store',
+    }),
   );
 });
 
@@ -140,7 +145,7 @@ it('distinguishes actual HTTP failure statuses and rejects external destinations
   });
 });
 
-it('ends a hung resolve or HEAD at ten seconds and aborts transport', async () => {
+it('ends a hung resolve or preflight at ten seconds and aborts transport', async () => {
   vi.useFakeTimers();
   const hass = createHASS();
   for (const phase of ['resolve', 'head']) {

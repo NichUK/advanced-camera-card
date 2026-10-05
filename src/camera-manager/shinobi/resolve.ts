@@ -33,7 +33,10 @@ export async function resolveShinobiMedia(
         let response: Response;
         try {
           response = await fetch(canonicalizeHAURL(hass, resolved.url), {
-            method: 'HEAD',
+            // HA authenticates signed requests only for GET. A one-byte Range
+            // probes the authorized original relay without downloading a clip.
+            method: 'GET',
+            headers: { Range: 'bytes=0-0' },
             signal: abort.signal,
             redirect: 'error',
             cache: 'no-store',
@@ -41,6 +44,9 @@ export async function resolveShinobiMedia(
         } catch {
           throw new ShinobiArchiveError('network', 'resolve');
         }
+        // Stop the response body immediately after its headers, including when
+        // an upstream server ignores Range and returns the entire file.
+        abort.abort();
         if (!response.ok) {
           throw new ShinobiArchiveError(
             response.status === 401
