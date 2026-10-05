@@ -29,5 +29,7 @@ it('leaves a completed archive gap empty while retaining legacy viewer selection
   expect(isExactTimeGap([clip])).toBe(false);
   expect(isExactTimeGap(null, new Date(0))).toBe(false);
   expect(isExactTimeGap([], new Date(0))).toBe(false);
+  expect(isExactTimeGap([], new Date(0), true)).toBe(true);
+  expect(isExactTimeGap(null, new Date(0), true)).toBe(false);
   expect(isExactTimeGap([clip, legacy], new Date(0))).toBe(false);
 });

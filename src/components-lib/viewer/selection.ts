@@ -3,9 +3,11 @@ import type { ViewItem, ViewMedia } from '../../view/item';
 export const isExactTimeGap = (
   media: readonly ViewMedia[] | null,
   target?: Date,
+  verifiedEmpty = false,
 ): boolean =>
   !!target &&
-  !!media?.length &&
+  !!media &&
+  (media.length > 0 || verifiedEmpty) &&
   media.every((item) => item.requiresExactTimeSelection()) &&
   !media.some((item) => item.includesTime(target));
 
