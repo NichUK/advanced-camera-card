@@ -25,7 +25,7 @@ let inUse = false;
 /**
  * See the worker below for what `responses` and `repeat` ask it to do.
  */
-const createTestMediaURL = (
+export const createTestMediaURL = (
   responses: number[],
   repeat = false,
   filename: string = SNAPSHOT_FIXTURE_FILENAME,
@@ -145,7 +145,7 @@ export const waitForTestMediaRequestCount = async (
  * it would not.
  */
 const worker = setupWorker(
-  http.get(`${TEST_MEDIA_PATH}/:file`, async ({ request, params }) => {
+  http.all(`${TEST_MEDIA_PATH}/:file`, async ({ request, params }) => {
     const url = new URL(request.url);
     const token = url.searchParams.get('token');
     if (!token) {
@@ -185,11 +185,14 @@ const worker = setupWorker(
     const fixture = await fetch(createFixtureURL(String(params.file)));
 
     return fixture.ok
-      ? new HttpResponse(await fixture.arrayBuffer(), {
-          headers: {
-            'Content-Type': fixture.headers.get('Content-Type') ?? 'image/png',
+      ? new HttpResponse(
+          request.method === 'HEAD' ? null : await fixture.arrayBuffer(),
+          {
+            headers: {
+              'Content-Type': fixture.headers.get('Content-Type') ?? 'image/png',
+            },
           },
-        })
+        )
       : new HttpResponse(null, { status: fixture.status });
   }),
 );

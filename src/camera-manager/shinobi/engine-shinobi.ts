@@ -2,7 +2,6 @@ import { LRUCache } from '../../cache/lru';
 import type { CameraConfig } from '../../config/schema/cameras';
 import type { HomeAssistant } from '../../ha/types';
 import { QuerySource } from '../../query-source';
-import { AdvancedCameraCardError } from '../../types';
 import { withTimeout } from '../../utils/concurrency/with-timeout';
 import type { ViewMedia } from '../../view/item';
 import type { ViewItemCapabilities } from '../../view/types';
@@ -22,6 +21,7 @@ import {
   type RecordingSegmentsQueryResultsMap,
 } from '../types';
 import { ShinobiCamera } from './camera';
+import { archiveError, ShinobiArchiveError } from './errors';
 import { ShinobiRecording } from './media';
 import { clipIdentifierSchema, type ArchiveIdentity } from './types';
 
@@ -161,14 +161,14 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
       end <= start ||
       end.getTime() - start.getTime() > 26 * 3600000
     ) {
-      throw new AdvancedCameraCardError('Invalid recording interval');
+      throw new ShinobiArchiveError('metadata', 'discovery');
     }
     const batches = await Promise.all(
       Array.from(query.cameraIDs, async (cameraID) => {
         const camera = store.getCamera(cameraID);
         const archive = camera instanceof ShinobiCamera ? camera.getArchive() : null;
         if (!archive) {
-          throw new AdvancedCameraCardError('Shinobi recording camera unavailable');
+          throw new ShinobiArchiveError('metadata', 'discovery');
         }
         return this._getCameraRecordings(
           hass,
@@ -226,15 +226,13 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
       }
     }
     if (this._pending.size >= 16) {
-      throw new AdvancedCameraCardError(
-        'Recording requests busy; retry the selected time',
-      );
+      throw new ShinobiArchiveError('network', 'discovery');
     }
     const key = `${scope}|${start.getTime()}|${end.getTime()}`;
     const work = withTimeout(
       this._fetchCameraRecordings(hass, cameraID, archive, start, end),
       10000,
-      new AdvancedCameraCardError('Recording metadata timeout'),
+      new ShinobiArchiveError('timeout', 'discovery'),
     );
     this._pending.set(key, { scope, start, end, work });
     try {
@@ -262,15 +260,19 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
     end: Date,
   ): Promise<ShinobiRecording[]> {
     const media: ShinobiRecording[] = [];
-    const children = await this._browseMediaWalker.walk(hass, [
-      {
-        targets: [
-          `media-source://shinobi_recordings/window|${archive.shinobi_recordings_entry}|${archive.shinobi_recordings_monitor}|${start.getTime() / 1000}|${end.getTime() / 1000}`,
-        ],
-      },
-    ]);
+    const children = await this._browseMediaWalker
+      .walk(hass, [
+        {
+          targets: [
+            `media-source://shinobi_recordings/window|${archive.shinobi_recordings_entry}|${archive.shinobi_recordings_monitor}|${start.getTime() / 1000}|${end.getTime() / 1000}`,
+          ],
+        },
+      ])
+      .catch((error: unknown) => {
+        throw archiveError(error, 'discovery');
+      });
     if (children.length > 10000) {
-      throw new AdvancedCameraCardError('Recording metadata limit exceeded');
+      throw new ShinobiArchiveError('metadata', 'discovery');
     }
     for (const child of children) {
       const result = clipIdentifierSchema.safeParse(child.media_content_id.split('|'));
@@ -281,11 +283,11 @@ export class ShinobiCameraManagerEngine extends BrowseMediaCameraManagerEngine {
         !child.can_play ||
         child.media_content_type !== 'video/mp4'
       ) {
-        throw new AdvancedCameraCardError('Invalid Shinobi recording metadata');
+        throw new ShinobiArchiveError('metadata', 'discovery');
       }
       const [, , , id, begin, finish] = result.data;
       if (begin * 1000 >= end.getTime() || finish * 1000 <= start.getTime()) {
-        throw new AdvancedCameraCardError('Recording outside requested interval');
+        throw new ShinobiArchiveError('metadata', 'discovery');
       }
       media.push(
         new ShinobiRecording(

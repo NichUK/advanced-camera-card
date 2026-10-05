@@ -9,8 +9,10 @@ import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
+import { ShinobiArchiveError } from '../camera-manager/shinobi/errors.js';
 import { MediaLoadedInfoSourceController } from '../components-lib/media-loaded-info-source-controller.js';
 import { VideoMediaPlayerController } from '../components-lib/media-player/video';
+import { triggerMediaUnavailableIssue } from '../components-lib/media-unavailable-issue.js';
 import videoPlayerStyle from '../scss/video-player.scss?inline';
 import type { MediaPlayer, MediaPlayerController, MediaPlayerElement } from '../types';
 import { mayHaveAudio } from '../utils/audio';
@@ -36,6 +38,26 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
 
   @property({ type: Boolean })
   public controls = false;
+
+  @property({ type: Boolean })
+  public archive = false;
+
+  private _archiveError(): void {
+    if (!this.archive || !this.targetID) {
+      return;
+    }
+    const code = this._refVideo.value?.error?.code;
+    const error = new ShinobiArchiveError(
+      code === 3 ? 'decode' : code === 2 ? 'network' : 'unsupported',
+      'playback',
+    );
+    triggerMediaUnavailableIssue(this, {
+      targetID: this.targetID,
+      reason: error.category === 'network' ? 'server_error' : 'unsupported',
+      description: error.message,
+      automaticRetry: error.retryable,
+    });
+  }
 
   private _refVideo: Ref<MediaPlayerElement<HTMLVideoElement>> = createRef();
   private _mediaPlayerController = new VideoMediaPlayerController(
@@ -94,8 +116,13 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
         }}
         @ended=${() => fireAdvancedCameraCardEvent(this, 'media:ended')}
         @seeking=${() => fireAdvancedCameraCardEvent(this, 'media:seek-request')}
+        @error=${() => this._archiveError()}
       >
-        <source src="${ifDefined(this.url)}" type="video/mp4" />
+        <source
+          src="${ifDefined(this.url)}"
+          type="video/mp4"
+          @error=${() => this._archiveError()}
+        />
       </video>
     `;
   }

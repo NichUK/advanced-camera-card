@@ -11,10 +11,17 @@ import { guard } from 'lit/directives/guard.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import type { CameraManager } from '../../camera-manager/manager.js';
+import { ShinobiArchiveError } from '../../camera-manager/shinobi/errors.js';
+import { resolveShinobiMedia } from '../../camera-manager/shinobi/resolve.js';
 import { QueryType } from '../../camera-manager/types.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
 import { LazyLoadController } from '../../components-lib/lazy-load-controller.js';
+import { MediaPlayerLivenessDetector } from '../../components-lib/live/liveness/detectors/media-player-liveness.js';
 import { MediaLoadWatchdogController } from '../../components-lib/media-load-watchdog-controller.js';
+import {
+  resolveMediaUnavailableIssue,
+  triggerMediaUnavailableIssue,
+} from '../../components-lib/media-unavailable-issue.js';
 import { ResolvedMediaController } from '../../components-lib/resolved-media-controller.js';
 import {
   getSignedURLErrorText,
@@ -85,12 +92,33 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
 
   private _refProvider: Ref<MediaPlayerElement> = createRef();
   private _lazyLoadController: LazyLoadController = new LazyLoadController(this);
+  private _archiveLiveness: MediaPlayerLivenessDetector | null = null;
+
+  public disconnectedCallback(): void {
+    this._archiveLiveness?.unsubscribe();
+    this._archiveLiveness = null;
+    super.disconnectedCallback();
+  }
 
   // Lit runs controllers in declaration order: Resolve first, then sign.
   private _resolvedMediaController = new ResolvedMediaController(this, () => ({
     hass: this.hass,
     contentID: this._shouldLoad() ? this.media?.getContentID() ?? null : null,
     cache: this.resolvedMediaCache,
+    ...(this.media?.requiresExactTimeSelection() && {
+      resolve: resolveShinobiMedia,
+      onError: (error: unknown) => {
+        const targetID = this.media?.getID();
+        if (targetID && error instanceof ShinobiArchiveError) {
+          triggerMediaUnavailableIssue(this, {
+            targetID,
+            reason: 'server_error',
+            description: error.message,
+            automaticRetry: error.retryable,
+          });
+        }
+      },
+    }),
   }));
 
   private _signedURLController = new SignedURLController(this, () => {
@@ -119,7 +147,8 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
     // Watch for media load failure (including resolving media ID and signing).
     new MediaLoadWatchdogController(this, {
       getTargetID: () => this.media?.getID() ?? null,
-      isLoadExpected: () => this._shouldLoad(),
+      isLoadExpected: () =>
+        this._shouldLoad() && !this._resolvedMediaController.getError(),
     });
   }
 
@@ -161,6 +190,22 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
   }
 
   protected willUpdate(changedProps: PropertyValues): void {
+    if (changedProps.has('media') && this._archiveLiveness) {
+      this._archiveLiveness.unsubscribe();
+      this._archiveLiveness = null;
+    }
+    if (this.media?.requiresExactTimeSelection() && !this._archiveLiveness) {
+      this._archiveLiveness = new MediaPlayerLivenessDetector(this, () => {
+        const targetID = this.media?.getID();
+        const verdict = this._archiveLiveness?.getVerdict();
+        if (targetID && verdict?.state === 'not_live') {
+          triggerMediaUnavailableIssue(this, { targetID, reason: 'stalled' });
+        } else if (targetID && verdict?.state === 'live') {
+          resolveMediaUnavailableIssue(this, { targetID, reason: 'stalled' });
+        }
+      });
+      this._archiveLiveness.subscribe();
+    }
     if (changedProps.has('viewerConfig') || changedProps.has('forceSelected')) {
       this._lazyLoadController.setConfiguration({
         lazyLoad: this.viewerConfig?.lazy_load,
@@ -237,6 +282,10 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
       return;
     }
 
+    const resolutionError = this._resolvedMediaController.getError();
+    if (resolutionError instanceof ShinobiArchiveError) {
+      return renderNotificationBlockFromText(resolutionError.message);
+    }
     const error = this._signedURLController.getError();
     if (error) {
       const contentID = this.media?.getContentID();
@@ -280,6 +329,7 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
           : html`
               <advanced-camera-card-video-player
                 ${ref(this._refProvider)}
+                .archive=${this.media.requiresExactTimeSelection()}
                 url=${url}
                 aria-label="${this.media.getTitle() ?? ''}"
                 title="${this.media.getTitle() ?? ''}"

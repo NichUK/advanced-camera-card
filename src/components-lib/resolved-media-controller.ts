@@ -12,6 +12,8 @@ interface ResolvedMediaControllerOptions {
   contentID?: string | null;
 
   cache?: ResolvedMediaCache | null;
+  resolve?: (hass: HomeAssistant, contentID: string) => Promise<ResolvedMedia>;
+  onError?: (error: unknown) => void;
 }
 
 /**
@@ -22,10 +24,12 @@ export class ResolvedMediaController implements ReactiveController {
   private _getOptionsCallback: () => ResolvedMediaControllerOptions;
 
   private _value: ResolvedMedia | null = null;
+  private _error: unknown = null;
 
   // Inputs of the last request.
   private _targetContentID: string | null = null;
   private _targetCache: ResolvedMediaCache | null = null;
+  private _targetResolver: ResolvedMediaControllerOptions['resolve'];
 
   private _requestGeneration = new Generation();
 
@@ -41,33 +45,47 @@ export class ResolvedMediaController implements ReactiveController {
     return this._value;
   }
 
+  public getError(): unknown {
+    return this._error;
+  }
+
   public hostDisconnected(): void {
     this._requestGeneration.invalidate();
     this._value = null;
+    this._error = null;
     this._targetContentID = null;
     this._targetCache = null;
+    this._targetResolver = undefined;
   }
 
   public async hostUpdate(): Promise<void> {
-    const { hass, contentID, cache } = this._getOptionsCallback();
+    const { hass, contentID, cache, resolve, onError } = this._getOptionsCallback();
 
     if (!hass || !contentID) {
       // Invalidate any in-flight request so a stale result cannot repopulate
       // the controller after the inputs have been cleared.
       this._requestGeneration.invalidate();
       this._value = null;
+      this._error = null;
       this._targetContentID = null;
       this._targetCache = null;
+      this._targetResolver = undefined;
       return;
     }
 
-    const targetCache = cache ?? null;
-    if (contentID === this._targetContentID && targetCache === this._targetCache) {
+    const targetCache = resolve ? null : cache ?? null;
+    if (
+      contentID === this._targetContentID &&
+      targetCache === this._targetCache &&
+      resolve === this._targetResolver
+    ) {
       return;
     }
 
     this._targetContentID = contentID;
     this._targetCache = targetCache;
+    this._targetResolver = resolve;
+    this._error = null;
 
     // Read the cache here rather than leaving it to resolveMedia below, so a
     // hit can return without waiting.
@@ -79,9 +97,24 @@ export class ResolvedMediaController implements ReactiveController {
     }
 
     this._value = null;
+    this._error = null;
 
     const requestID = this._requestGeneration.next();
-    const resolved = await resolveMedia(hass, contentID, targetCache);
+    let resolved: ResolvedMedia | null;
+    if (resolve) {
+      try {
+        resolved = await resolve(hass, contentID);
+      } catch (error) {
+        if (this._requestGeneration.isCurrent(requestID)) {
+          this._error = error;
+          onError?.(error);
+          this._host.requestUpdate();
+        }
+        return;
+      }
+    } else {
+      resolved = await resolveMedia(hass, contentID, targetCache);
+    }
     if (!this._requestGeneration.isCurrent(requestID)) {
       return;
     }
