@@ -15,10 +15,9 @@ snapshot in the viewer, or a live view built from stills.
 Ten seconds of red at 64x48, VP8. Ten seconds so a test can watch it play
 without it ending under the assertion.
 
-WebM rather than the MP4 (what a real camera integration likely serves), because
-nothing available offline encodes H.264: Playwright's bundled `ffmpeg` has
-libvpx only. This does not change what is under test -- every non-HLS video
-takes the same branch.
+The existing small fixture uses WebM because Playwright's bundled `ffmpeg`
+has libvpx only. The separate Shinobi fixture below was encoded with a full
+local FFmpeg installation and exercises MP4 decoding and seeking.
 
 Rebuild it with ImageMagick and the `ffmpeg` Playwright installs alongside its
 browsers:
@@ -34,3 +33,22 @@ done > /tmp/frames.mjpeg
 ~/.cache/ms-playwright/ffmpeg-*/ffmpeg-linux -f image2pipe -vcodec mjpeg -r 10 \
   -i /tmp/frames.mjpeg -c:v libvpx -b:v 50k tests/browser/fixtures/clip.webm
 ```
+
+## `shinobi-4k-h264.mp4`
+
+Synthetic blue frames only: 120 seconds, 3840x2160, H.264, 5 frames/second,
+one-second keyframe interval, no audio, MP4 fast-start. No camera footage is
+included. SHA-256:
+`583e7ba057467505e73deba42dcf5548ce6cabb9dd26ddae41e75526d1ac9ee3`.
+
+Rebuilt with FFmpeg 8.0.1:
+
+```sh
+ffmpeg -hide_banner -loglevel error -f lavfi \
+  -i color=c=blue:s=3840x2160:r=5:d=120 \
+  -c:v libx264 -threads 1 -preset ultrafast -pix_fmt yuv420p \
+  -g 5 -movflags +faststart tests/browser/fixtures/shinobi-4k-h264.mp4
+```
+
+This establishes supported-fixture decoding, dimensions and seek behavior.
+It does not establish decoding of original Clear HEVC/AAC recordings.

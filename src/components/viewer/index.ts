@@ -11,6 +11,7 @@ import { customElement, property } from 'lit/decorators.js';
 import type { CameraManager } from '../../camera-manager/manager.js';
 import type { ViewItemManager } from '../../card-controller/view/item-manager.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
+import { getViewerMediaIndex } from '../../components-lib/viewer/selection';
 import type { CardWideConfig } from '../../config/schema/types.js';
 import type { ViewerConfig } from '../../config/schema/viewer.js';
 import type { ResolvedMediaCache } from '../../ha/resolved-media.js';
@@ -63,9 +64,13 @@ export class AdvancedCameraCardViewer extends LitElement {
   protected willUpdate(changedProperties: PropertyValues): void {
     if (changedProperties.has('viewManagerEpoch')) {
       const view = this.viewManagerEpoch?.manager.getView();
-      this.isEmpty = !view?.queryResults
-        ?.getResults()
-        ?.filter((result) => ViewItemClassifier.isMedia(result)).length;
+      this.isEmpty =
+        getViewerMediaIndex(
+          view?.queryResults
+            ?.getResults()
+            .filter((result) => ViewItemClassifier.isMedia(result)) ?? null,
+          view?.queryResults?.getSelectedResult() ?? null,
+        ) === null;
     }
   }
 

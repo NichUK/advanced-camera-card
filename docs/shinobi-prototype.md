@@ -3,8 +3,9 @@
 Work tracked against [upstream issue #1594](https://github.com/dermotduffy/advanced-camera-card/issues/1594).
 
 This branch experiments with a Shinobi camera engine using the existing card's
-media browser, recording gallery and timeline. It is not a functioning Shinobi
-engine yet. The HA-side integration and research live in the companion
+media browser, recording gallery and timeline. The preview engine now discovers
+archive camera identity and plays a covering file at the requested offset.
+The HA-side integration and research live in the companion
 `NichUK/homeassistant-shinobi` project.
 
 ## First acceptance target
@@ -37,3 +38,5 @@ provide the initial implementation base.
 - Camera-engine/config tests and coverage, strict TypeScript and production build.
 
 Multi-file export and a compatibility viewing stream are later features.
+
+For the preview, the timeline date picker selects and plays the exact instant. Keep the mini timeline visible during playback and pending requests with media_viewer.controls.timeline.mode: below. The current input uses the browser display timezone; explicit site-timezone and DST disambiguation are SHI-06. Synthetic H.264 browser performance is documented in evidence/SHI-05/validation.md; original Clear HEVC and physical iPhone acceptance remain open.

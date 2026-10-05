@@ -1,6 +1,7 @@
 import { afterAll, assert, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { Capabilities } from '../../../src/camera-manager/capabilities';
+import { ShinobiRecording } from '../../../src/camera-manager/shinobi/media';
 import { QueryType, type EventQuery } from '../../../src/camera-manager/types';
 import { applyViewModifiers } from '../../../src/card-controller/view/modifiers';
 import { ViewQueryExecutor } from '../../../src/card-controller/view/view-query-executor';
@@ -25,6 +26,43 @@ import { createPopulatedAPI } from './test-utils';
 
 describe('ViewQueryExecutor', () => {
   describe('getExistingQueryModifiers', () => {
+    it('leaves exact archive gaps unselected and selects only a covering file', async () => {
+      const api = createPopulatedAPI();
+      const executor = new ViewQueryExecutor(api);
+      const start = new Date('2026-10-02T12:34:00Z');
+      const end = new Date('2026-10-02T12:36:00Z');
+      const media = new ShinobiRecording('archive', 'source', 'clip', start, end);
+      const manager = api.getCameraManager();
+      if (!manager) {
+        throw new Error('missing manager');
+      }
+      vi.mocked(manager.executeMediaQueries).mockResolvedValue([
+        media,
+        new ShinobiRecording('', 'source', 'other', start, end),
+      ]);
+      const query = new UnifiedQuery();
+      query.addNode({
+        source: QuerySource.Camera,
+        type: QueryType.Recording,
+        cameraIDs: new Set(['archive']),
+      });
+      for (const [time, expected] of [
+        [new Date('2026-10-02T12:35:00Z'), 'clip'],
+        [end, null],
+      ] as const) {
+        const view = new View({ view: 'recording', camera: 'archive', query });
+        applyViewModifiers(
+          view,
+          await executor.getExistingQueryModifiers(view, {
+            selectResult: { time: { time } },
+          }),
+        );
+        expect(view.queryResults?.getSelectedResult()?.getID() ?? null).toBe(expected);
+        expect(view.queryResults?.getSelectedResult('archive')?.getID() ?? null).toBe(
+          expected,
+        );
+      }
+    });
     it('should return modifier with result when query present', async () => {
       const api = createPopulatedAPI();
       const viewQueryExecutor = new ViewQueryExecutor(api);

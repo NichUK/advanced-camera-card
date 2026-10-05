@@ -66,12 +66,12 @@ describe('Shinobi archive identity', () => {
       'remote-control-entity',
       '2-way-audio',
       'clips',
-      'recordings',
-      'seek',
     ] as const) {
       expect(camera.getCapabilities()?.has(capability)).toBe(false);
     }
     expect(camera.getCapabilities()?.has('menu')).toBe(true);
+    expect(camera.getCapabilities()?.has('recordings')).toBe(true);
+    expect(camera.getCapabilities()?.has('seek')).toBe(true);
   });
   it('has no archive before initialization', () => {
     expect(

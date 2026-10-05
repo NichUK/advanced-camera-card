@@ -295,6 +295,12 @@ export class ViewManager implements ViewManagerInterface {
       return;
     }
 
+    // Another query may target the same camera and interval but a different
+    // selected instant. Its completion still supersedes this request.
+    if (this._view && this._view.context?.loading?.query !== loadingIndex) {
+      return;
+    }
+
     if (error) {
       // Clear the loading flag before surfacing the error. Otherwise the
       // view stays marked in-flight and components (gallery, viewer) keep
@@ -317,9 +323,7 @@ export class ViewManager implements ViewManagerInterface {
     this._api.getIssueManager().reset('media_query');
 
     const newView = this._view.clone();
-    if (this._view.context?.loading?.query === loadingIndex) {
-      this._markViewAsNotLoadingQuery(newView);
-    }
+    this._markViewAsNotLoadingQuery(newView);
     applyViewModifiers(newView, viewModifiers);
     this._setView(newView);
   }

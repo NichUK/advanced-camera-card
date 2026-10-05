@@ -15,6 +15,7 @@ import {
 
 import type { CameraManager } from '../../camera-manager/manager';
 import { rangesOverlap } from '../../camera-manager/range';
+import { Engine } from '../../camera-manager/types';
 import { convertRangeToCacheFriendlyTimes } from '../../camera-manager/utils/range-to-cache-friendly';
 import type { FoldersManager } from '../../card-controller/folders/manager';
 import type { ViewItemManager } from '../../card-controller/view/item-manager';
@@ -85,6 +86,7 @@ export class TimelineController {
 
   private _source: TimelineDataSource | null = null;
   private _timeline: ExtendedTimeline | null = null;
+  private _dateSelectionEpoch = 0;
 
   private _hass: HomeAssistant | null = null;
 
@@ -256,7 +258,49 @@ export class TimelineController {
   }
 
   public setTimelineDate(date: Date): void {
-    this._timeline?.moveTo(date);
+    if (!this._timeline) {
+      return;
+    }
+    this._dateSelectionEpoch++;
+    const window = this._timeline.getWindow();
+    const halfWidth = (window.end.getTime() - window.start.getTime()) / 2;
+    const selectedWindow = {
+      start: new Date(date.getTime() - halfWidth),
+      end: new Date(date.getTime() + halfWidth),
+    };
+    this._viewManagerEpoch?.manager.setViewWithMergedContext(
+      this._getTimelineContext(selectedWindow),
+    );
+    this._timeline.moveTo(date, { animation: false });
+    const view = this._viewManagerEpoch?.manager.getView();
+    const cameraIDs = view?.query?.getAllCameraIDs();
+    if (
+      cameraIDs?.size &&
+      Array.from(cameraIDs).every(
+        (id) =>
+          this._cameraManager?.getStore().getCamera(id)?.getEngine().getEngineType() ===
+          Engine.Shinobi,
+      )
+    ) {
+      // A date input gives an exact instant; a timeline pixel cannot. Keep
+      // other engines' date navigation behavior unchanged.
+      const query = this._source?.buildRecordingsWindowedQuery({
+        start: sub(date, { minutes: 30 }),
+        end: add(date, { minutes: 30 }),
+      });
+      if (query) {
+        void this._viewManagerEpoch?.manager.setViewByParametersWithExistingQuery({
+          params: { view: 'media', query },
+          queryExecutorOptions: { selectResult: { time: { time: date } } },
+          modifiers: [
+            new MergeContextViewModifier({
+              ...this._getTimelineContext(selectedWindow),
+              mediaViewer: { seek: date },
+            }),
+          ],
+        });
+      }
+    }
   }
 
   public shouldSupportSeeking(): boolean {
@@ -661,6 +705,7 @@ export class TimelineController {
     byUser: boolean;
     event: Event & { additionalEvent: string };
   }): Promise<void> => {
+    const dateSelectionEpoch = this._dateSelectionEpoch;
     this._removeTargetBar();
     const view = this._viewManagerEpoch?.manager.getView();
 
@@ -676,6 +721,13 @@ export class TimelineController {
     }
 
     await this._source?.refresh(this._getPrefetchWindow(properties));
+
+    if (
+      dateSelectionEpoch !== this._dateSelectionEpoch ||
+      view !== this._viewManagerEpoch?.manager.getView()
+    ) {
+      return;
+    }
 
     if (!view.query) {
       return;
@@ -723,6 +775,7 @@ export class TimelineController {
   }
 
   private async _updateTimelineFromView(): Promise<void> {
+    const dateSelectionEpoch = this._dateSelectionEpoch;
     const view = this._viewManagerEpoch?.manager.getView();
     if (!view || !this._timelineConfig || !this._source || !this._timeline) {
       return;
@@ -773,6 +826,15 @@ export class TimelineController {
       // disruptive to the user.
       await this._source?.refresh(prefetchedWindow);
       this._source.addMediaToDataset(view.query, view.queryResults?.getResults());
+    }
+
+    // A metadata response started before the date picker moved must not reset
+    // the user's new window or cancel its animation.
+    if (
+      dateSelectionEpoch !== this._dateSelectionEpoch ||
+      view !== this._viewManagerEpoch?.manager.getView()
+    ) {
+      return;
     }
 
     const currentSelection = this._timeline.getSelection();
@@ -926,6 +988,11 @@ export class TimelineController {
    * @returns A tuple of start/end date.
    */
   private _getDefaultStartEnd(): TimelineWindow {
+    const selectedWindow =
+      this._viewManagerEpoch?.manager.getView()?.context?.timeline?.window;
+    if (selectedWindow) {
+      return selectedWindow;
+    }
     const end = new Date();
     const start = sub(end, {
       seconds: this._getConfiguredWindowSeconds(),
@@ -980,6 +1047,16 @@ export class TimelineController {
       return null;
     }
 
+    const cameraIDs = this._viewManagerEpoch?.manager
+      .getView()
+      ?.query?.getAllCameraIDs();
+    const shinobi =
+      !!cameraIDs?.size &&
+      Array.from(cameraIDs).every(
+        (id) =>
+          this._cameraManager?.getStore().getCamera(id)?.getEngine().getEngineType() ===
+          Engine.Shinobi,
+      );
     const defaultWindow = this._getDefaultStartEnd();
     const stack = this._timelineConfig.style === 'stack';
     // Configuration for the Timeline, see:
@@ -1017,8 +1094,17 @@ export class TimelineController {
       },
       selectable: true,
       stack: stack,
-      start: defaultWindow.start,
-      end: defaultWindow.end,
+      // Supplying start/end before vis's initial fit can leave an empty
+      // timeline hidden when that fit does not emit a range change. Apply
+      // the latest requested window after the initial draw instead.
+      ...(shinobi
+        ? {
+            onInitialDrawComplete: () => {
+              const window = this._getDefaultStartEnd();
+              this._timeline?.setWindow(window.start, window.end, { animation: false });
+            },
+          }
+        : { start: defaultWindow.start, end: defaultWindow.end }),
       groupHeightMode: 'auto',
       tooltip: {
         followMouse: true,

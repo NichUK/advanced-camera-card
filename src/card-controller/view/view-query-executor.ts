@@ -2,6 +2,7 @@ import { sub } from 'date-fns';
 
 import { MEDIA_CHUNK_SIZE_DEFAULT } from '../../const';
 import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index';
+import { ViewMedia } from '../../view/item';
 import { QueryResults } from '../../view/query-results';
 import type { UnifiedQuery } from '../../view/unified-query';
 import { UnifiedQueryBuilder } from '../../view/unified-query-builder';
@@ -283,6 +284,17 @@ export class ViewQueryExecutor {
     } else if (options?.selectResult?.func) {
       queryResults.selectResultIfFound(options.selectResult.func);
     } else if (timeSelection) {
+      // Exact archive selections must leave gaps empty instead of retaining
+      // the default newest recording.
+      for (const item of queryResults.getResults()) {
+        if (item instanceof ViewMedia && item.requiresExactTimeSelection()) {
+          queryResults.resetSelectedResult();
+          const cameraID = item.getCameraID();
+          if (cameraID) {
+            queryResults.resetSelectedResult(cameraID);
+          }
+        }
+      }
       queryResults.selectBestResult((itemArray) =>
         findBestMediaTimeIndex(
           itemArray,
