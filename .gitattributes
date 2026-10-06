@@ -1,0 +1,3 @@
+
+# Preserve verbatim upstream notice bytes on every supported checkout.
+scripts/vite/notices/*.txt text eol=lf

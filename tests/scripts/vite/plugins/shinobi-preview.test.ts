@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,6 +26,7 @@ it('includes packaged licence variants and exact-version offline notices, failin
           version: '1.0.0',
           file: 'fixture.txt',
           source: 'https://example.invalid/pinned/LICENSE',
+          sha256: createHash('sha256').update('offline MIT terms').digest('hex'),
         },
       ]),
     );
@@ -41,6 +43,13 @@ it('includes packaged licence variants and exact-version offline notices, failin
     expect(bundledNotices([module, module], notices)).toContain('fixture@1.0.0');
     expect(bundledNotices([module], notices)).toContain('offline MIT terms');
     expect(bundledNotices([nestedModule], notices)).toContain('fixture@1.0.0');
+    writeFileSync(path.join(notices, 'fixture.txt'), 'altered terms');
+    expect(() => bundledNotices([module], notices)).toThrow('notice changed');
+    writeFileSync(path.join(notices, 'fixture.txt'), 'offline MIT terms');
+    writeFileSync(manifest, JSON.stringify({ name: 'unexpected', version: '1.0.0' }));
+    expect(() => bundledNotices([module], notices)).toThrow('manifest unavailable');
+    rmSync(manifest);
+    expect(() => bundledNotices([module], notices)).toThrow('manifest unavailable');
     writeFileSync(manifest, JSON.stringify({ name: 'fixture', version: '2.0.0' }));
     expect(() => bundledNotices([module], notices)).toThrow(
       'unavailable: fixture@2.0.0',

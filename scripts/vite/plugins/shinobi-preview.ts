@@ -28,6 +28,7 @@ export const bundledNotices = (
     const packageName = packageParts[0].startsWith('@')
       ? packageParts.slice(0, 2).join('/')
       : packageParts[0];
+    let resolved = false;
     let directory = path.dirname(module.split('?')[0]);
     while (directory !== path.dirname(directory)) {
       const manifest = path.join(directory, 'package.json');
@@ -41,6 +42,7 @@ export const bundledNotices = (
           'version' in document &&
           typeof document.version === 'string'
         ) {
+          resolved = true;
           const name = `${document.name}@${document.version}`;
           if (!notices.has(name)) {
             const files = readdirSync(directory).filter((file) =>
@@ -64,14 +66,17 @@ export const bundledNotices = (
                 path.basename(record.file) !== record.file ||
                 !('source' in record) ||
                 typeof record.source !== 'string' ||
-                !record.source.startsWith('https://')
+                !record.source.startsWith('https://') ||
+                !('sha256' in record) ||
+                typeof record.sha256 !== 'string'
               ) {
                 throw new Error(`Bundled licence notice unavailable: ${name}`);
               }
-              notices.set(
-                name,
-                `Source: ${record.source}\n${readFileSync(path.join(noticeRoot, record.file), 'utf8')}`,
-              );
+              const content = readFileSync(path.join(noticeRoot, record.file));
+              if (createHash('sha256').update(content).digest('hex') !== record.sha256) {
+                throw new Error(`Bundled licence notice changed: ${name}`);
+              }
+              notices.set(name, `Source: ${record.source}\n${content.toString('utf8')}`);
               break;
             }
             notices.set(
@@ -85,6 +90,9 @@ export const bundledNotices = (
         }
       }
       directory = path.dirname(directory);
+    }
+    if (!resolved) {
+      throw new Error(`Bundled dependency manifest unavailable: ${packageName}`);
     }
   }
   return [...notices]

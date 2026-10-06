@@ -3,6 +3,11 @@ on:
   pull_request:
     paths:
       - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - '.yarnrc.yml'
+      - '.gitattributes'
+      - 'knip.jsonc'
       - 'tests/**'
       - 'scripts/**'
       - 'vitest*.ts'
@@ -16,8 +21,8 @@ jobs:
   preview:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22.14.0'
       - run: corepack yarn@4.9.1 install --immutable
