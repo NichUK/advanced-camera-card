@@ -18,7 +18,10 @@ import type { IssueTriggerEventData } from '../../card-controller/issues/types.j
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
 import { LazyLoadController } from '../../components-lib/lazy-load-controller.js';
 import { MediaPlayerLivenessDetector } from '../../components-lib/live/liveness/detectors/media-player-liveness.js';
-import { MediaLoadWatchdogController } from '../../components-lib/media-load-watchdog-controller.js';
+import {
+  MEDIA_LOADING_TIMEOUT_SECONDS,
+  MediaLoadWatchdogController,
+} from '../../components-lib/media-load-watchdog-controller.js';
 import {
   resolveMediaUnavailableIssue,
   triggerMediaUnavailableIssue,
@@ -172,6 +175,10 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
     // Watch for media load failure (including resolving media ID and signing).
     new MediaLoadWatchdogController(this, {
       getTargetID: () => this.media?.getID() ?? null,
+      // Reserve two seconds of the archive's ten-second visible-failure budget
+      // for resolution and rendering when the browser emits no format error.
+      getTimeoutSeconds: () =>
+        this.media?.requiresExactTimeSelection() ? 8 : MEDIA_LOADING_TIMEOUT_SECONDS,
       isLoadExpected: () =>
         this._shouldLoad() &&
         !this._resolvedMediaController.getError() &&

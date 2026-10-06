@@ -101,6 +101,25 @@ describe('MediaLoadWatchdogController', () => {
     ]);
   });
 
+  it('honors a host load budget before its end-to-end failure deadline', () => {
+    const host = createLitElement();
+    const failures: Event[] = [];
+    host.addEventListener('advanced-camera-card:issue:trigger', (event) =>
+      failures.push(event),
+    );
+    const controller = new MediaLoadWatchdogController(host, {
+      getTargetID: () => 'archive',
+      isLoadExpected: () => true,
+      getTimeoutSeconds: () => 8,
+    });
+    controller.hostConnected();
+    vi.advanceTimersByTime(7999);
+    expect(failures).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(failures).toHaveLength(1);
+    controller.hostDisconnected();
+  });
+
   it('should not report a load that arrives in time', () => {
     const harness = createHarness();
     harness.connect();
