@@ -44,6 +44,9 @@ jobs:
   # nor Node installed.
   check-hacs:
     name: Check / HACS
+    # HACS validates published releases. This preview fork has no HACS release;
+    # its code/artifact boundaries are checked by shinobi-preview.yml instead.
+    if: github.repository == 'dermotduffy/advanced-camera-card'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
