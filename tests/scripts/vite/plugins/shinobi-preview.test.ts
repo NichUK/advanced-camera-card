@@ -30,9 +30,17 @@ it('includes packaged licence variants and exact-version offline notices, failin
     );
     const module = path.join(dependency, 'index.js').replaceAll('\\', '/');
     const manifest = path.join(dependency, 'package.json');
+    const nested = path.join(dependency, 'internal');
+    mkdirSync(nested);
+    writeFileSync(
+      path.join(nested, 'package.json'),
+      JSON.stringify({ name: 'fixture/internal', version: '1.0.0' }),
+    );
+    const nestedModule = path.join(nested, 'index.js').replaceAll('\\', '/');
     writeFileSync(manifest, JSON.stringify({ name: 'fixture', version: '1.0.0' }));
     expect(bundledNotices([module, module], notices)).toContain('fixture@1.0.0');
     expect(bundledNotices([module], notices)).toContain('offline MIT terms');
+    expect(bundledNotices([nestedModule], notices)).toContain('fixture@1.0.0');
     writeFileSync(manifest, JSON.stringify({ name: 'fixture', version: '2.0.0' }));
     expect(() => bundledNotices([module], notices)).toThrow(
       'unavailable: fixture@2.0.0',

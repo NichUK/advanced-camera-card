@@ -22,6 +22,12 @@ export const bundledNotices = (
     if (!module.includes('node_modules/')) {
       continue;
     }
+    const packageParts = module
+      .slice(module.lastIndexOf('node_modules/') + 13)
+      .split('/');
+    const packageName = packageParts[0].startsWith('@')
+      ? packageParts.slice(0, 2).join('/')
+      : packageParts[0];
     let directory = path.dirname(module.split('?')[0]);
     while (directory !== path.dirname(directory)) {
       const manifest = path.join(directory, 'package.json');
@@ -31,7 +37,7 @@ export const bundledNotices = (
           typeof document === 'object' &&
           document !== null &&
           'name' in document &&
-          typeof document.name === 'string' &&
+          document.name === packageName &&
           'version' in document &&
           typeof document.version === 'string'
         ) {
