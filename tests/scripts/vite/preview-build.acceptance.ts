@@ -35,9 +35,12 @@ it('attributes and hashes the actual generated preview bytes and commit build da
         .digest('hex'),
     );
   }
-  const main = readFileSync('dist-preview/shinobi-camera-card.js', 'utf8');
-  expect(main).toContain(date);
-  expect(main).not.toContain(BUILD_DATE_PLACEHOLDER);
+  const javascript = files
+    .filter((name) => name.endsWith('.js'))
+    .map((name) => readFileSync(`dist-preview/${name}`, 'utf8'))
+    .join('\n');
+  expect(javascript).toContain(date);
+  expect(javascript).not.toContain(BUILD_DATE_PLACEHOLDER);
   expect(readFileSync('dist-preview/THIRD-PARTY-NOTICES.txt', 'utf8')).toContain(
     'Permission is hereby granted',
   );
