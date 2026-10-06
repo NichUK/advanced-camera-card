@@ -13,6 +13,7 @@ import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 import { ShinobiArchiveError } from '../camera-manager/shinobi/errors.js';
 import { preflightShinobiMedia } from '../camera-manager/shinobi/resolve.js';
 import { MediaLoadedInfoSourceController } from '../components-lib/media-loaded-info-source-controller.js';
+import { FRAME_STALL_SECONDS } from '../components-lib/media-player/frame-stall-watchdog';
 import { VideoMediaPlayerController } from '../components-lib/media-player/video';
 import { triggerMediaUnavailableIssue } from '../components-lib/media-unavailable-issue.js';
 import videoPlayerStyle from '../scss/video-player.scss?inline';
@@ -100,6 +101,7 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
     this,
     () => this._refVideo.value ?? null,
     () => this.controls,
+    () => (this.archive ? 8 : FRAME_STALL_SECONDS),
   );
 
   private _mediaLoadedInfoSourceController = new MediaLoadedInfoSourceController(this, {
