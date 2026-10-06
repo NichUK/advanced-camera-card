@@ -25,6 +25,9 @@ interface MediaLoadWatchdogConfig {
   // rebuilt (e.g. a retry re-keying a player below it), so the wait starts
   // again. Omitted by a host that a retry replaces outright.
   getAttemptID?: () => unknown;
+
+  // Hosts with an end-to-end deadline can reserve time for resolution/rendering.
+  getTimeoutSeconds?: () => number;
 }
 
 /**
@@ -181,7 +184,10 @@ export class MediaLoadWatchdogController implements ReactiveController {
     }
 
     if (!this._fired && !this._timer.isRunning()) {
-      this._timer.start(MEDIA_LOADING_TIMEOUT_SECONDS, () => this._onTimeout());
+      this._timer.start(
+        this._config.getTimeoutSeconds?.() ?? MEDIA_LOADING_TIMEOUT_SECONDS,
+        () => this._onTimeout(),
+      );
     }
   }
 
