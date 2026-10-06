@@ -559,6 +559,23 @@ describe('VideoMediaPlayerController', () => {
       expect(host.addController).toHaveBeenCalled();
     });
 
+    it('reports a silent archive within its shorter frame budget', () => {
+      const { video } = createVideo();
+      const controller = new VideoMediaPlayerController(
+        createLitElement(),
+        () => video,
+        undefined,
+        () => 8,
+      );
+      const callback = vi.fn();
+      const unsubscribe = controller.subscribeLiveness(callback);
+      vi.advanceTimersByTime(7999);
+      expect(callback).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(callback).toHaveBeenCalledWith(false);
+      unsubscribe();
+    });
+
     it('should report no stall when requestVideoFrameCallback is unavailable', () => {
       const { video } = createVideo({ rvfc: false });
       expect('requestVideoFrameCallback' in video).toBe(false);
