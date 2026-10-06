@@ -18,6 +18,7 @@ import { resolveAutoHideState } from '../../components-lib/auto-hide.js';
 import { MediaActionsController } from '../../components-lib/media-actions-controller.js';
 import { MediaHeightController } from '../../components-lib/media-height-controller.js';
 import { MediaLoadedInfoSinkController } from '../../components-lib/media-loaded-info-sink-controller.js';
+import { getViewerMediaIndex } from '../../components-lib/viewer/selection';
 import type { TransitionEffect } from '../../config/schema/common/transition-effect.js';
 import { configDefaults, type CardWideConfig } from '../../config/schema/types.js';
 import type { ViewerConfig } from '../../config/schema/viewer.js';
@@ -274,15 +275,7 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
       // _selected is an index, it needs to be updated if either the selected
       // item or the media changes.
       if (oldSelectedItem !== newSelectedItem || resetMedia) {
-        const newSelected =
-          this._media?.findIndex((item) => item === newSelectedItem) ?? null;
-
-        // If there's no selected item, just choose the last (most recent one) to
-        // avoid rendering a blank. This could happen if the selected item was a
-        // folder.
-        this._selected =
-          newSelected ??
-          (this._media && this._media.length ? this._media.length - 1 : null);
+        this._selected = getViewerMediaIndex(this._media, newSelectedItem ?? null);
       }
     }
   }

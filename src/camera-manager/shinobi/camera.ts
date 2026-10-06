@@ -31,6 +31,8 @@ export class ShinobiCamera extends EntityCamera {
   protected override async _getRawCapabilities(): Promise<CapabilitiesRaw> {
     return {
       live: false,
+      recordings: true,
+      seek: true,
       menu: true,
       substream: false,
       trigger: false,

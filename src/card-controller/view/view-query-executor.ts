@@ -2,6 +2,7 @@ import { sub } from 'date-fns';
 
 import { MEDIA_CHUNK_SIZE_DEFAULT } from '../../const';
 import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index';
+import { ViewMedia } from '../../view/item';
 import { QueryResults } from '../../view/query-results';
 import type { UnifiedQuery } from '../../view/unified-query';
 import { UnifiedQueryBuilder } from '../../view/unified-query-builder';
@@ -283,12 +284,27 @@ export class ViewQueryExecutor {
     } else if (options?.selectResult?.func) {
       queryResults.selectResultIfFound(options.selectResult.func);
     } else if (timeSelection) {
-      queryResults.selectBestResult((itemArray) =>
-        findBestMediaTimeIndex(
-          itemArray,
-          timeSelection.time,
-          timeSelection.favorCameraID,
-        ),
+      // Exact archive selections must leave gaps empty instead of retaining
+      // the default newest recording.
+      let exactSelection = false;
+      for (const item of queryResults.getResults()) {
+        if (item instanceof ViewMedia && item.requiresExactTimeSelection()) {
+          exactSelection = true;
+          queryResults.resetSelectedResult();
+          const cameraID = item.getCameraID();
+          if (cameraID) {
+            queryResults.resetSelectedResult(cameraID);
+          }
+        }
+      }
+      queryResults.selectBestResult(
+        (itemArray) =>
+          findBestMediaTimeIndex(
+            itemArray,
+            timeSelection.time,
+            timeSelection.favorCameraID,
+          ),
+        exactSelection ? { main: true, allCameras: true } : undefined,
       );
     }
 

@@ -83,6 +83,10 @@ export class ViewMedia {
     return !!startTime && !!endTime && seek >= startTime && seek <= endTime;
   }
 
+  public requiresExactTimeSelection(): boolean {
+    return false;
+  }
+
   // Sets the favorite attribute (if any). This purely sets the media item as a
   // favorite in JS.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -158,7 +158,7 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
     const view = this.viewManagerEpoch?.manager.getView();
     const isLoading = !!view?.context?.loading?.query;
 
-    if (isLoading) {
+    if (isLoading && !this._controller.shouldKeepDatePickerVisible(view)) {
       if (!this.mini) {
         return renderNotificationBlockFromText(localize('error.awaiting_media'), {
           icon: 'mdi:chart-gantt',
@@ -274,7 +274,12 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
 
   protected updated(changedProperties: PropertyValues): void {
     super.updated(changedProperties);
-    if (this._controller.setTimelineElement(this._refTimeline.value)) {
+    if (
+      this._controller.setTimelineElement(this._refTimeline.value) &&
+      !this._controller.shouldKeepDatePickerVisible(
+        this.viewManagerEpoch?.manager.getView(),
+      )
+    ) {
       // If the timeline was just created, give it one frame to draw itself.
       // Failure to do so may result in subsequent calls to
       // `this._timeline.setwindow()` being entirely ignored. Example case:

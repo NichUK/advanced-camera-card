@@ -176,6 +176,31 @@ describe('TimelineDataSource', () => {
   });
 
   describe('should get groups', () => {
+    it('keeps Shinobi and mixed-camera prefetch within 26 hours without day rounding', async () => {
+      const cameraManager = createTestCameraManager();
+      const engine = cameraManager.getStore().getCamera(CAMERA_ID)?.getEngine();
+      assert(engine);
+      vi.spyOn(engine, 'getEngineType').mockReturnValue(Engine.Shinobi);
+      const source = createSource(
+        cameraManager,
+        mock<FoldersManager>(),
+        mock<ConditionStateManagerReadonlyInterface>(),
+        cameraEventsQuery,
+        false,
+      );
+      const window = {
+        start: new Date('2026-10-24T23:30:00Z'),
+        end: new Date('2026-10-25T23:30:00Z'),
+      };
+      expect(source.getCacheFriendlyWindow(window)).toEqual(window);
+      const prefetch = source.getPrefetchWindow(window);
+      expect(prefetch.start.toISOString()).toBe('2026-10-24T22:30:00.000Z');
+      expect(prefetch.end.toISOString()).toBe('2026-10-26T00:30:00.000Z');
+      await source.refresh(prefetch);
+      const query = vi.mocked(cameraManager.executeMediaQueries).mock.calls[0][0][0];
+      expect(query.start).toEqual(prefetch.start);
+      expect(query.end).toEqual(prefetch.end);
+    });
     it('should get camera based groups', () => {
       const source = createSource(
         createTestCameraManager(),

@@ -21,7 +21,7 @@ class ResultSlice {
   }
 
   private _getInitialSelectedIndex(options?: ResultSliceOptions): number | null {
-    if (options?.selectedIndex !== undefined && options?.selectedIndex !== null) {
+    if (options?.selectedIndex !== undefined) {
       return options.selectedIndex;
     }
     if (options?.results && options.results.length) {
@@ -257,6 +257,8 @@ export class QueryResults {
     return cameraID ? this._cameras.get(cameraID) ?? null : this._main;
   }
 
+  public getResults(): ViewItem[];
+  public getResults(cameraID?: string): ViewItem[] | null;
   public getResults(cameraID?: string): ViewItem[] | null {
     return this.getSlice(cameraID)?.getResults() ?? null;
   }

@@ -10,9 +10,14 @@ The `shinobi` preview engine uses the original `shinobi_recordings` Home Assista
 adapter. Set `camera_entity` to its archive camera, and either select `engine:
 shinobi` or use automatic detection. The legacy `shinobi` integration is not
 auto-detected. No Shinobi address or API key belongs in the card configuration.
-This first engine checkpoint registers archive identity only; history support is
-added in the following preview stories. Live view, PTZ, events, snapshots,
+Historical playback queries a bounded recording interval and selects the file
+covering the requested instant. A complete gap has no selected recording; the
+player never substitutes the nearest file. Live view, PTZ, events, snapshots,
 favorites and download are not advertised.
+
+This is a preview. Original Clear HEVC playback, physical iPhone acceptance,
+cross-file continuation and installation/coexistence checks remain separate
+delivery gates. The stable-engine capability matrix below excludes this preview.
 
 ```yaml
 cameras:
