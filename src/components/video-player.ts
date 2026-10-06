@@ -58,7 +58,9 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
   }
 
   private _reportArchiveError(error: ShinobiArchiveError): void {
-    if (!this.targetID) {return;}
+    if (!this.targetID) {
+      return;
+    }
     triggerMediaUnavailableIssue(this, {
       targetID: this.targetID,
       reason: error.category === 'network' ? 'server_error' : 'unsupported',
@@ -68,7 +70,9 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
   }
 
   private async _archiveSourceError(): Promise<void> {
-    if (!this.archive || !this.url || !this.targetID) {return;}
+    if (!this.archive || !this.url || !this.targetID) {
+      return;
+    }
     const url = this.url;
     const targetID = this.targetID;
     const abort = new AbortController();
@@ -80,7 +84,9 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
         new ShinobiArchiveError('timeout', 'playback'),
       );
     } catch (failure) {
-      if (failure instanceof ShinobiArchiveError) {error = failure;}
+      if (failure instanceof ShinobiArchiveError) {
+        error = failure;
+      }
     } finally {
       abort.abort();
     }
@@ -112,7 +118,9 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
   public disconnectedCallback(): void {
     // Lit clears ref directives when super disconnects the render tree.
     const video = this._refVideo.value;
-    if (this.archive) {this._mediaLoadedInfoSourceController.clear();}
+    if (this.archive) {
+      this._mediaLoadedInfoSourceController.clear();
+    }
     super.disconnectedCallback();
     if (this.archive && video) {
       video.pause();
