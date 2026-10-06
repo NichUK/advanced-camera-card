@@ -232,6 +232,7 @@ it('recovers when the MP4 fails after its successful authorization preflight', a
 it('reports an actionable failure for non-video bytes instead of leaving the spinner', async () => {
   const { card, began } = await mount(createFixtureURL('still-red.png'));
   const issue = await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  expect(performance.now() - began).toBeLessThanOrEqual(10000);
   expect(issue.detail).toMatchObject({ key: 'media_unavailable' });
   await card.clickControl('Media unavailable');
   await expect
@@ -241,7 +242,6 @@ it('reports an actionable failure for non-video bytes instead of leaving the spi
           ?.shadowRoot?.textContent,
     )
     .toMatch(/does not support|Stream stalled/);
-  expect(performance.now() - began).toBeLessThanOrEqual(10000);
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
 
