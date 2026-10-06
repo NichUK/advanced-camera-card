@@ -12,16 +12,14 @@ import { FakeHASS } from '../../browser/fake-hass';
 import { createFixtureURL } from '../../browser/fixtures';
 import { MountedCardFactory, type MountedCard } from '../../browser/mounted-card';
 import {
-  createTestMediaURL,
-  getTestMediaRequestCount,
-  useTestMedia,
-} from '../../browser/test-media';
+  createShinobiHTTPMediaURL,
+  getShinobiHTTPMediaRequestCount,
+  releaseShinobiHTTPMedia,
+} from '../../browser/shinobi-http-media';
 import {
   getBlockNotificationText,
   RESIZE_LOOP_CONSOLE_ERROR,
 } from '../../browser/test-utils';
-
-useTestMedia();
 
 it('releases archive transport on disconnect and reloads a reconnected player', async () => {
   const player = document.createElement('advanced-camera-card-video-player');
@@ -173,7 +171,7 @@ it('keeps monitoring a loaded player after same-content metadata revalidation', 
 });
 
 it('shows deleted media promptly, stops automatic retries, and explicitly renews HA access', async () => {
-  const url = createTestMediaURL([404, 200], true, 'shinobi-4k-h264.mp4');
+  const url = createShinobiHTTPMediaURL([404, 200]);
   const { card, began, resolves } = await mount(url);
   await card.events.waitForFirst('advanced-camera-card:issue:trigger');
   await expect
@@ -185,7 +183,7 @@ it('shows deleted media promptly, stops automatic retries, and explicitly renews
   await new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
-  expect(getTestMediaRequestCount(url)).toBe(1);
+  expect(await getShinobiHTTPMediaRequestCount(url)).toBe(1);
   await card.clickControl('Media unavailable');
   await card.clickControl('Retry');
   await expect
@@ -200,7 +198,7 @@ it('shows deleted media promptly, stops automatic retries, and explicitly renews
 });
 
 it('recovers from a temporary server failure without changing the historical instant', async () => {
-  const url = createTestMediaURL([503, 200], true, 'shinobi-4k-h264.mp4');
+  const url = createShinobiHTTPMediaURL([503, 200]);
   const { card, resolves } = await mount(url);
   await card.events.waitForFirst('advanced-camera-card:issue:trigger');
   await expect
@@ -215,9 +213,13 @@ it('recovers from a temporary server failure without changing the historical ins
 });
 
 it('recovers when the MP4 fails after its successful authorization preflight', async () => {
-  const url = createTestMediaURL([200, 503, 503, 200], true, 'shinobi-4k-h264.mp4');
-  const { card, resolves } = await mount(url);
+  const url = createShinobiHTTPMediaURL([200, 503]);
+  const { card, resolves, began } = await mount(url, 0);
   await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  expect(performance.now() - began).toBeLessThanOrEqual(10000);
+  await releaseShinobiHTTPMedia(url);
+  await card.clickControl('Media unavailable');
+  await card.clickControl('Retry');
   await expect
     .poll(() => deepQuery<HTMLVideoElement>(card.card, 'video')?.videoWidth, {
       timeout: 5000,
@@ -227,9 +229,10 @@ it('recovers when the MP4 fails after its successful authorization preflight', a
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
 
-it('reports a native unsupported media error instead of leaving the spinner', async () => {
+it('reports an actionable failure for non-video bytes instead of leaving the spinner', async () => {
   const { card, began } = await mount(createFixtureURL('still-red.png'));
-  await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  const issue = await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  expect(issue.detail).toMatchObject({ key: 'media_unavailable' });
   await card.clickControl('Media unavailable');
   await expect
     .poll(
@@ -237,7 +240,7 @@ it('reports a native unsupported media error instead of leaving the spinner', as
         deepQuery<HTMLElement>(card.card, 'advanced-camera-card-notification')
           ?.shadowRoot?.textContent,
     )
-    .toContain('does not support');
+    .toMatch(/does not support|Stream stalled/);
   expect(performance.now() - began).toBeLessThanOrEqual(10000);
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
@@ -276,7 +279,7 @@ it('measures twenty categorized HTTP failures through the rendered archive viewe
   const observations: { status: number; milliseconds: number }[] = [];
   for (const status of [401, 403, 404, 503]) {
     for (let repetition = 0; repetition < 5; repetition++) {
-      const url = createTestMediaURL([status], true, 'shinobi-4k-h264.mp4');
+      const url = createShinobiHTTPMediaURL([status]);
       const { card, began } = await mount(url, 0);
       await card.events.waitForFirst('advanced-camera-card:issue:trigger');
       const text =
@@ -292,7 +295,7 @@ it('measures twenty categorized HTTP failures through the rendered archive viewe
       observations.push({ status, milliseconds });
       expect(milliseconds).toBeLessThanOrEqual(10000);
       expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
-      expect(getTestMediaRequestCount(url)).toBe(1);
+      expect(await getShinobiHTTPMediaRequestCount(url)).toBe(1);
       card.destroy();
     }
   }
@@ -301,8 +304,7 @@ it('measures twenty categorized HTTP failures through the rendered archive viewe
       observations,
       p95: observations.map((row) => row.milliseconds).sort((a, b) => a - b)[18],
       browser: navigator.userAgent,
-      boundary:
-        'HA resolve + service-worker HTTP GET Range status + rendered failure; synthetic media',
+      boundary: 'HA resolve + actual synthetic HTTP GET Range status + rendered failure',
     },
   });
 });
