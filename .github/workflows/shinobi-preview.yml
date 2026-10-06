@@ -35,6 +35,7 @@ jobs:
           VITEST_BROWSER: chromium
       - run: corepack yarn@4.9.1 build
       - run: corepack yarn@4.9.1 vite build --mode shinobi-preview
+      - run: corepack yarn@4.9.1 vitest run --config vitest.preview-build.config.ts
       - run: corepack yarn@4.9.1 vitest run --config vitest.preview.config.ts
         env:
           VITEST_BROWSER: chromium

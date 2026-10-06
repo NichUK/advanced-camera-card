@@ -98,7 +98,7 @@ export const bundledNotices = (
     }
   }
   return [...notices]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([name, notice]) => `===== ${name} =====\n${notice}\n`)
     .join('\n');
 };
@@ -154,6 +154,9 @@ export const shinobiPreview = (): Plugin => {
             'yarn.lock',
             'vite.config.ts',
             '.yarnrc.yml',
+            '.browserslistrc',
+            'tsconfig.json',
+            'LICENSE',
           )
         ) {
           this.error('Preview build inputs must be committed before packaging.');
