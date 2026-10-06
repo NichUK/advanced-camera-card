@@ -1,0 +1,87 @@
+{
+  "observations": [
+    {
+      "status": 401,
+      "milliseconds": 28.100000023841858
+    },
+    {
+      "status": 401,
+      "milliseconds": 28.600000023841858
+    },
+    {
+      "status": 401,
+      "milliseconds": 32.699999928474426
+    },
+    {
+      "status": 401,
+      "milliseconds": 33.799999952316284
+    },
+    {
+      "status": 401,
+      "milliseconds": 39.200000047683716
+    },
+    {
+      "status": 403,
+      "milliseconds": 35.300000071525574
+    },
+    {
+      "status": 403,
+      "milliseconds": 36.199999928474426
+    },
+    {
+      "status": 403,
+      "milliseconds": 31.199999928474426
+    },
+    {
+      "status": 403,
+      "milliseconds": 51.5
+    },
+    {
+      "status": 403,
+      "milliseconds": 51.89999997615814
+    },
+    {
+      "status": 404,
+      "milliseconds": 58.800000071525574
+    },
+    {
+      "status": 404,
+      "milliseconds": 68.10000002384186
+    },
+    {
+      "status": 404,
+      "milliseconds": 54.5
+    },
+    {
+      "status": 404,
+      "milliseconds": 53.10000002384186
+    },
+    {
+      "status": 404,
+      "milliseconds": 55.700000047683716
+    },
+    {
+      "status": 503,
+      "milliseconds": 53.10000002384186
+    },
+    {
+      "status": 503,
+      "milliseconds": 50.5
+    },
+    {
+      "status": 503,
+      "milliseconds": 52.799999952316284
+    },
+    {
+      "status": 503,
+      "milliseconds": 56.199999928474426
+    },
+    {
+      "status": 503,
+      "milliseconds": 47.700000047683716
+    }
+  ],
+  "p95": 58.800000071525574,
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+  "boundary": "HA resolve + service-worker HTTP HEAD status + rendered failure; synthetic media"
+}

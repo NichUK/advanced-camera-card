@@ -22,6 +22,69 @@ const createResolvedMedia = (url = 'http://media'): ResolvedMedia => ({
 });
 
 describe('ResolvedMediaController', () => {
+  it('uses an uncached scoped resolver and reports current failures only', async () => {
+    const host = mock<ReactiveControllerHost>();
+    const hass = createHASS();
+    const cache = new ResolvedMediaCache();
+    cache.set(CONTENT_ID, createResolvedMedia('expired'));
+    const resolve = vi.fn().mockRejectedValue(new Error('unavailable'));
+    const onError = vi.fn();
+    const options = { hass, contentID: CONTENT_ID, cache, resolve, onError };
+    const controller = new ResolvedMediaController(host, () => options);
+    await controller.hostUpdate();
+    expect(resolve).toHaveBeenCalledWith(hass, CONTENT_ID);
+    expect(controller.getValue()).toBeNull();
+    expect(controller.getError()).toEqual(new Error('unavailable'));
+    expect(onError).toHaveBeenCalledWith(controller.getError());
+    await controller.hostUpdate();
+    expect(resolve).toHaveBeenCalledTimes(1);
+    options.resolve = vi.fn().mockResolvedValue(createResolvedMedia('renewed'));
+    await controller.hostUpdate();
+    expect(controller.getError()).toBeNull();
+    expect(controller.getValue()?.url).toBe('renewed');
+    controller.hostDisconnected();
+    expect(controller.getError()).toBeNull();
+  });
+
+  it('does not report late failure after disconnect or a newer input', async () => {
+    const host = mock<ReactiveControllerHost>();
+    let reject: (error: Error) => void = () => {};
+    const resolve = vi.fn(
+      () =>
+        new Promise<ResolvedMedia>((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    const onError = vi.fn();
+    const controller = new ResolvedMediaController(host, () => ({
+      hass: createHASS(),
+      contentID: CONTENT_ID,
+      resolve,
+      onError,
+    }));
+    const work = controller.hostUpdate();
+    controller.hostDisconnected();
+    reject(new Error('old failure'));
+    await work;
+    expect(controller.getError()).toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+    expect(host.requestUpdate).not.toHaveBeenCalled();
+  });
+
+  it('retains a scoped error even when the caller has no event handler', async () => {
+    const controller = new ResolvedMediaController(
+      mock<ReactiveControllerHost>(),
+      () => ({
+        hass: createHASS(),
+        contentID: CONTENT_ID,
+        resolve: async () => {
+          throw new Error('failure');
+        },
+      }),
+    );
+    await controller.hostUpdate();
+    expect(controller.getError()).toEqual(new Error('failure'));
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();

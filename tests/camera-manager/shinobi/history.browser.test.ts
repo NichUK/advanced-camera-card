@@ -309,23 +309,26 @@ it('selects actual quiet coverage through a rendered timeline click', async () =
     .toBeGreaterThanOrEqual(HTMLMediaElement.HAVE_CURRENT_DATA);
 });
 
-it('shows no selected recording in a complete gap', async () => {
-  const card = await mount();
-  const core = await choose(card, new Date('2026-10-02T12:37:00Z'));
-  await expect
-    .poll(() =>
-      core.viewManagerEpoch?.manager.getView()?.queryResults?.hasSelectedResult(),
-    )
-    .toBe(false);
-  await expect.poll(() => deepQuery(card.card, 'video')).toBeNull();
-  await expect
-    .poll(
-      () =>
-        deepQuery(card.card, 'advanced-camera-card-notification-block')?.shadowRoot
-          ?.textContent ?? '',
-    )
-    .toContain('No recording covers the selected time.');
-});
+it.each(['2026-10-02T12:37:00Z', '2026-10-01T12:00:00Z'])(
+  'shows no selected recording in a complete gap at %s',
+  async (instant) => {
+    const card = await mount();
+    const core = await choose(card, new Date(instant));
+    await expect
+      .poll(() =>
+        core.viewManagerEpoch?.manager.getView()?.queryResults?.hasSelectedResult(),
+      )
+      .toBe(false);
+    await expect.poll(() => deepQuery(card.card, 'video')).toBeNull();
+    await expect
+      .poll(
+        () =>
+          deepQuery(card.card, 'advanced-camera-card-notification-block')?.shadowRoot
+            ?.textContent ?? '',
+      )
+      .toContain('No recording covers the selected time.');
+  },
+);
 
 it('ignores late discovery after another time is selected', async () => {
   const deferred: { release?: () => void } = {};

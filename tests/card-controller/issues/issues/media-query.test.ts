@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mock } from 'vitest-mock-extended';
 
+import type { CameraManagerEngine } from '../../../../src/camera-manager/engine';
+import { ShinobiArchiveError } from '../../../../src/camera-manager/shinobi/errors';
+import { Engine } from '../../../../src/camera-manager/types';
 import type { CardController } from '../../../../src/card-controller/controller';
 import { MediaQueryIssue } from '../../../../src/card-controller/issues/issues/media-query';
 import type { InternalCallbackActionConfig } from '../../../../src/config/schema/actions/custom/internal';
+import { UnifiedQuery } from '../../../../src/view/unified-query';
+import { createCameraManager, createStore } from '../../../camera-manager/test-utils';
 import { createCardAPI, flushPromises } from '../../../test-utils';
+import { createRecordingQuery, createView } from '../../../view/test-utils';
 
 const createIssue = (): {
   issue: MediaQueryIssue;
@@ -15,6 +22,42 @@ const createIssue = (): {
 };
 
 describe('MediaQueryIssue', () => {
+  it('preserves the requested historical instant on a Shinobi retry', async () => {
+    const { issue, api } = createIssue();
+    const engine = mock<CameraManagerEngine>();
+    engine.getEngineType.mockReturnValue(Engine.Shinobi);
+    vi.mocked(api.getCameraManager).mockReturnValue(
+      createCameraManager(createStore([{ cameraID: 'camera', engine }])),
+    );
+    const time = new Date('2026-10-02T12:34:00Z');
+    vi.mocked(api.getViewManager().getView).mockReturnValue(
+      createView({
+        view: 'recording',
+        query: new UnifiedQuery([createRecordingQuery('camera')]),
+        context: { mediaViewer: { seek: time } },
+      }),
+    );
+    issue.trigger({ error: new ShinobiArchiveError('network', 'discovery') });
+    issue.retry();
+    await flushPromises();
+    expect(
+      api.getViewManager().setViewByParametersWithExistingQuery,
+    ).toHaveBeenCalledWith({
+      intent: 'retry',
+      queryExecutorOptions: { useCache: false, selectResult: { time: { time } } },
+    });
+    expect(api.getViewManager().setViewByParametersWithNewQuery).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit retry for terminal archive failures', () => {
+    const { issue, api } = createIssue();
+    issue.trigger({ error: new ShinobiArchiveError('unavailable', 'discovery') });
+    expect(issue.hasIssue()).toBe(true);
+    expect(issue.needsRetry()).toBe(false);
+    expect(issue.canRetryNow()).toBe(false);
+    issue.retry();
+    expect(api.getViewManager().setViewByParametersWithNewQuery).toHaveBeenCalled();
+  });
   it('should have correct key', () => {
     const { issue } = createIssue();
     expect(issue.key).toBe('media_query');

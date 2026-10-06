@@ -56,3 +56,13 @@ It does not establish decoding of original Clear HEVC/AAC recordings.
 ## Shinobi one-second handoff fixture
 
 shinobi-4k-one-second.mp4 is the first second of the synthetic blue H.264 fixture above, copied without re-encoding using FFmpeg 8.0.1 with -t 1 -c copy -movflags +faststart. It remains 3840x2160/5 fps with duration exactly one second. SHA-256: c64892809cd584af6be60941ce9d85f3eec33429209a20dce968b66a9fafb2d0. Contiguous one-second metadata matches its duration so browser handoffs end naturally; no camera footage is included.
+
+# Audio-only archive failure fixture
+
+`shinobi-audio-only.mp4` is one second of generated silent AAC, mono 16 kHz, with no video track. It reproduces a browser that decodes AAC while silently dropping an unsupported video codec. Generated with FFmpeg 8.0.1:
+
+```shell
+ffmpeg -f lavfi -i anullsrc=r=16000:cl=mono -t 1 -c:a aac -movflags +faststart shinobi-audio-only.mp4
+```
+
+SHA256: `fa79e14c8caf43402f05dced816c28e6053b36fc744d28507020060a6eebbaff`. This contains no recorded footage.

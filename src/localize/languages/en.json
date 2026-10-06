@@ -515,6 +515,18 @@
       "transition_effect": "Live camera transition effect",
       "zoomable": "Zoomable/Pannable"
     },
+    "shinobi": {
+      "errors": {
+        "authentication": "Recording authorization expired. Sign in to Home Assistant, then retry.",
+        "denied": "You do not have access to this recording camera. Check Home Assistant permissions.",
+        "unavailable": "Recording expired or deleted. Choose another historical time.",
+        "network": "Recording server unavailable. Retry the selected time.",
+        "metadata": "Recording information is invalid or incomplete. Check the integration, then retry.",
+        "timeout": "Recording request timed out. Retry the selected time.",
+        "unsupported": "This browser does not support the recording format. Try a compatible browser.",
+        "decode": "This recording could not be decoded. Try a compatible browser or another recording."
+      }
+    },
     "media_viewer": {
       "auto_mute": "Automatically mute media",
       "auto_pause": "Automatically pause media",
@@ -908,6 +920,7 @@
     },
     "media_unavailable": {
       "heading": "Media unavailable",
+      "manual_retry": "This recording cannot be played. Check the explanation below, then retry or choose another historical time.",
       "reasons": {
         "entity_unavailable": "Camera entity unavailable",
         "not_loading": "Media not loading",
@@ -967,6 +980,18 @@
       "yesterday": "Yesterday"
     },
     "where": "Where"
+  },
+  "shinobi": {
+    "errors": {
+      "authentication": "Recording authorization expired. Sign in to Home Assistant, then retry.",
+      "denied": "You do not have access to this recording camera. Check Home Assistant permissions.",
+      "unavailable": "Recording expired or deleted. Choose another historical time.",
+      "network": "Recording server unavailable. Retry the selected time.",
+      "metadata": "Recording information is invalid or incomplete. Check the integration, then retry.",
+      "timeout": "Recording request timed out. Retry the selected time.",
+      "unsupported": "This browser does not support the recording format. Try a compatible browser.",
+      "decode": "This recording could not be decoded. Try a compatible browser or another recording."
+    }
   },
   "media_viewer": {
     "unseekable": "Seek time not found in media",

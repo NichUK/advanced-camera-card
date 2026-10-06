@@ -9,6 +9,7 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 import type { CameraManager } from '../../camera-manager/manager.js';
+import { Engine, QueryType } from '../../camera-manager/types.js';
 import type { ViewItemManager } from '../../card-controller/view/item-manager.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
 import {
@@ -102,6 +103,26 @@ export class AdvancedCameraCardViewer extends LitElement {
               ?.getResults()
               .filter((result) => ViewItemClassifier.isMedia(result)) ?? null,
             view?.context?.mediaViewer?.seek,
+            !!view?.queryResults &&
+              !view.context?.loading?.query &&
+              !!view.camera &&
+              this.cameraManager
+                .getStore()
+                .getCamera(view.camera)
+                ?.getEngine()
+                .getEngineType() === Engine.Shinobi &&
+              !!view.query
+                ?.getMediaQueries({ cameraID: view.camera, type: QueryType.Recording })
+                .some(
+                  (query) =>
+                    'start' in query &&
+                    'end' in query &&
+                    !!query.start &&
+                    !!query.end &&
+                    !!view.context?.mediaViewer?.seek &&
+                    query.start <= view.context.mediaViewer.seek &&
+                    view.context.mediaViewer.seek < query.end,
+                ),
           ),
         },
         this.cameraManager,

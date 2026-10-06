@@ -12,6 +12,7 @@ import { keyed } from 'lit/directives/keyed.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import type { CameraManager } from '../../camera-manager/manager.js';
+import { ShinobiArchiveError } from '../../camera-manager/shinobi/errors.js';
 import { MergeContextViewModifier } from '../../card-controller/view/modifiers/merge-context.js';
 import { RemoveContextPropertyViewModifier } from '../../card-controller/view/modifiers/remove-context-property.js';
 import type { ViewManagerEpoch } from '../../card-controller/view/types.js';
@@ -398,9 +399,10 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
     }
     return html`<div class="recording-continuation">
       <span role="status" aria-live="polite"
-        >${localize(`media_viewer.continuation_${state.state}`)}</span
+        >${localize(`media_viewer.continuation_${state.state}`)}
+        ${state.state === 'error' ? state.error.message : ''}</span
       >
-      ${state.state === 'gap'
+      ${state.state === 'gap' || state.state === 'error'
         ? html`<button
             @click=${() => {
               void this._continuation.continueNext((time, current) =>
@@ -408,7 +410,9 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
               );
             }}
           >
-            ${localize('media_viewer.continue_next')}
+            ${localize(
+              state.state === 'gap' ? 'media_viewer.continue_next' : 'common.retry',
+            )}
           </button>`
         : ''}
       ${state.state === 'loading'
@@ -423,14 +427,14 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
     const view = this.viewManagerEpoch?.manager.getView();
     const camera = this.viewFilterCameraID ?? view?.camera;
     if (!view || !camera || !this.cameraManager || !this.viewManagerEpoch) {
-      throw new Error('Recording continuation unavailable');
+      throw new ShinobiArchiveError('metadata', 'continuation');
     }
     const queries = this.cameraManager.generateDefaultRecordingQueries(camera, {
       start: new Date(time.getTime() - 1800000),
       end: new Date(time.getTime() + 1800000),
     });
     if (!queries?.length) {
-      throw new Error('Recording continuation unavailable');
+      throw new ShinobiArchiveError('metadata', 'continuation');
     }
     // Revalidate the next file before switching; retention may have removed a
     // file that was present in the earlier viewport snapshot.
@@ -441,7 +445,7 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
       return;
     }
     if (media === null) {
-      throw new Error('Recording continuation unavailable');
+      throw new ShinobiArchiveError('metadata', 'continuation');
     }
     const results = new QueryResults({ results: media, selectedIndex: null });
     results.resetSelectedResult(camera);
@@ -474,7 +478,7 @@ export class AdvancedCameraCardViewerCarousel extends LitElement {
       load: async (start, end) => {
         const queries = manager.generateDefaultRecordingQueries(camera, { start, end });
         if (!queries?.length) {
-          throw new Error('Recording continuation unavailable');
+          throw new ShinobiArchiveError('unavailable', 'continuation');
         }
         return manager.executeMediaQueries(queries);
       },

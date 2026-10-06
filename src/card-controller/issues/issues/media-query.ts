@@ -1,3 +1,5 @@
+import { ShinobiArchiveError } from '../../../camera-manager/shinobi/errors.js';
+import { Engine } from '../../../camera-manager/types.js';
 import { createNotificationFromError } from '../../../components-lib/notification/factory.js';
 import type { Notification } from '../../../config/schema/actions/types.js';
 import { localize } from '../../../localize/localize.js';
@@ -42,13 +44,16 @@ export class MediaQueryIssue extends AbstractErrorIssue {
   // including while a retry is in flight -- so the backoff keeps escalating
   // across attempts instead of restarting each time one is dispatched.
   public needsRetry(): boolean {
-    return this._error !== null;
+    return (
+      this._error !== null &&
+      (!(this._error instanceof ShinobiArchiveError) || this._error.retryable)
+    );
   }
 
   // A retry can be dispatched only when one is not already in flight; otherwise
   // the manager waits for the in-flight attempt to succeed or fail.
   public canRetryNow(): boolean {
-    return this._error !== null && !this._retrying;
+    return this.needsRetry() && !this._retrying;
   }
 
   public retry(): boolean {
@@ -78,6 +83,28 @@ export class MediaQueryIssue extends AbstractErrorIssue {
 
   private async _runRetryQuery(): Promise<void> {
     try {
+      const view = this._api.getViewManager().getView();
+      const seek = view?.context?.mediaViewer?.seek;
+      if (
+        seek &&
+        view.query &&
+        view.camera &&
+        this._api
+          .getCameraManager()
+          .getStore()
+          .getCamera(view.camera)
+          ?.getEngine()
+          .getEngineType() === Engine.Shinobi
+      ) {
+        await this._api.getViewManager().setViewByParametersWithExistingQuery({
+          intent: 'retry',
+          queryExecutorOptions: {
+            useCache: false,
+            selectResult: { time: { time: seek } },
+          },
+        });
+        return;
+      }
       await this._api
         .getViewManager()
         .setViewByParametersWithNewQuery({ intent: 'retry' });

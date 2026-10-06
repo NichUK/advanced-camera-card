@@ -1,3 +1,4 @@
+import { archiveError, ShinobiArchiveError } from '../../camera-manager/shinobi/errors';
 import { AdvancedCameraCardError } from '../../types';
 import { errorToConsole } from '../../utils/basic';
 import { withTimeout } from '../../utils/concurrency/with-timeout';
@@ -11,7 +12,7 @@ export type RecordingContinuationState =
   | { state: 'loading' }
   | { state: 'gap'; next: Date }
   | { state: 'end' }
-  | { state: 'error' };
+  | { state: 'error'; time: Date; error: ShinobiArchiveError };
 
 /** Original-file continuation: a gap always requires an explicit operator action. */
 export class RecordingContinuation {
@@ -19,6 +20,7 @@ export class RecordingContinuation {
   private _source: ViewMedia | null = null;
   private _state: RecordingContinuationState | null = null;
   private _changed: () => void;
+  private _retryDiscovery: (() => Promise<void>) | null = null;
 
   constructor(changed: () => void) {
     this._changed = changed;
@@ -32,20 +34,25 @@ export class RecordingContinuation {
     this._epoch++;
     this._source = null;
     this._state = null;
+    this._retryDiscovery = null;
     this._changed();
   }
 
   public async continueNext(
     advance: (time: Date, current: () => boolean) => Promise<void>,
   ): Promise<void> {
-    if (this._state?.state !== 'gap') {
+    if (this._state?.state === 'error' && this._retryDiscovery) {
+      await this._retryDiscovery();
       return;
     }
-    const next = this._state.next;
+    if (this._state?.state !== 'gap' && this._state?.state !== 'error') {
+      return;
+    }
+    const next = this._state.state === 'gap' ? this._state.next : this._state.time;
     const epoch = ++this._epoch;
     this._state = { state: 'loading' };
     this._changed();
-    const timeoutError = new Error('Recording continuation timeout');
+    const timeoutError = new ShinobiArchiveError('timeout', 'continuation');
     try {
       await withTimeout(
         advance(next, () => epoch === this._epoch),
@@ -59,13 +66,15 @@ export class RecordingContinuation {
     } catch (error) {
       if (epoch === this._epoch) {
         this._epoch++;
+        const failure = archiveError(error, 'continuation');
         errorToConsole(
           new AdvancedCameraCardError('Recording continuation failed', {
             stage: 'advance',
             reason: error === timeoutError ? 'timeout' : 'request_failed',
+            category: failure.category,
           }),
         );
-        this._state = { state: 'error' };
+        this._state = { state: 'error', time: next, error: failure };
         this._changed();
       }
     }
@@ -91,6 +100,7 @@ export class RecordingContinuation {
       return;
     }
     this._source = source;
+    this._retryDiscovery = null;
     const epoch = ++this._epoch;
     this._state = { state: 'loading' };
     this._changed();
@@ -115,7 +125,7 @@ export class RecordingContinuation {
       }
       return false;
     };
-    const timeoutError = new Error('Recording continuation timeout');
+    const timeoutError = new ShinobiArchiveError('timeout', 'continuation');
     let stage = 'discovery';
     try {
       const work = async (): Promise<void> => {
@@ -155,15 +165,23 @@ export class RecordingContinuation {
       }
     } catch (error) {
       if (current()) {
+        const failure = archiveError(error, 'continuation');
         errorToConsole(
           new AdvancedCameraCardError('Recording continuation failed', {
             stage,
             reason: error === timeoutError ? 'timeout' : 'request_failed',
+            category: failure.category,
           }),
         );
         // Invalidate remaining work, including a load that outlives its deadline.
         this._epoch++;
-        this._state = { state: 'error' };
+        if (stage === 'discovery') {
+          this._retryDiscovery = async () => {
+            this._source = null;
+            await this.ended(source, known, options);
+          };
+        }
+        this._state = { state: 'error', time: boundary, error: failure };
         this._changed();
       }
     }

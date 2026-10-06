@@ -290,7 +290,7 @@ describe('Shinobi historical recording selection', () => {
     vi.useFakeTimers();
     try {
       const stale = engine.getRecordings(hass, store, query);
-      const failure = expect(stale).rejects.toThrow('metadata timeout');
+      const failure = expect(stale).rejects.toThrow('Recording request timed out');
       await vi.advanceTimersByTimeAsync(10000);
       await failure;
       walker.walk.mockResolvedValue([child]);
@@ -315,7 +315,7 @@ describe('Shinobi historical recording selection', () => {
     const { hass, walker, engine, store, query } = await setup();
     walker.walk.mockRejectedValueOnce(new Error('Unavailable'));
     await expect(engine.getRecordings(hass, store, query)).rejects.toThrow(
-      'Unavailable',
+      'Recording information is invalid',
     );
     await engine.getRecordings(hass, store, query);
     expect(walker.walk).toHaveBeenCalledTimes(2);
@@ -347,14 +347,14 @@ describe('Shinobi historical recording selection', () => {
         },
         { useCache: false },
       ),
-    ).rejects.toThrow('requests busy');
+    ).rejects.toThrow('Recording server unavailable');
     assert(release);
     release([]);
     await Promise.all(requests);
     walker.walk.mockResolvedValue(Array.from({ length: 10001 }, () => child));
     await expect(
       engine.getRecordings(hass, store, query, { useCache: false }),
-    ).rejects.toThrow('metadata limit exceeded');
+    ).rejects.toThrow('Recording information is invalid');
   });
 
   it('selects the next contiguous file at its half-open boundary and seeks across midnight', async () => {
@@ -447,7 +447,7 @@ describe('Shinobi historical recording selection', () => {
     ]) {
       walker.walk.mockResolvedValue([{ ...child, ...modification }]);
       await expect(engine.getRecordings(hass, store, query)).rejects.toThrow(
-        'Invalid Shinobi recording metadata',
+        'Recording information is invalid',
       );
     }
     walker.walk.mockResolvedValue([child]);
@@ -457,10 +457,10 @@ describe('Shinobi historical recording selection', () => {
         start: end,
         end: new Date(end.getTime() + 60000),
       }),
-    ).rejects.toThrow('outside requested interval');
+    ).rejects.toThrow('Recording information is invalid');
     await expect(
       engine.getRecordings(hass, store, { ...query, cameraIDs: new Set(['missing']) }),
-    ).rejects.toThrow('camera unavailable');
+    ).rejects.toThrow('Recording information is invalid');
     for (const bounds of [
       { start: end, end: start },
       { start: new Date('invalid'), end },
@@ -469,7 +469,7 @@ describe('Shinobi historical recording selection', () => {
     ]) {
       await expect(
         engine.getRecordings(hass, store, { ...query, ...bounds }),
-      ).rejects.toThrow('Invalid recording interval');
+      ).rejects.toThrow('Recording information is invalid');
     }
   });
   it('provides a bounded default window and returns only classified recording results', async () => {

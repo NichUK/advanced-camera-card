@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { assert, expect, it, vi } from 'vitest';
 
+import { ShinobiArchiveError } from '../../../src/camera-manager/shinobi/errors';
 import { ShinobiRecording } from '../../../src/camera-manager/shinobi/media';
 import { RecordingContinuation } from '../../../src/components-lib/viewer/recording-continuation';
 import { TestViewMedia } from '../../view/test-utils';
@@ -13,6 +14,73 @@ const clip = (start: number, end: number, cameraID = 'camera') =>
     new Date(start),
     new Date(end),
   );
+
+it.each(['automatic', 'explicit'])(
+  'retries a failed %s continuation at its requested instant',
+  async (kind) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const continuation = new RecordingContinuation(vi.fn());
+      const failure = new ShinobiArchiveError('network', 'discovery');
+      const advance = vi.fn().mockResolvedValue(undefined);
+      const load = vi
+        .fn()
+        .mockRejectedValueOnce(failure)
+        .mockResolvedValue([clip(1000, 2000)]);
+      await continuation.ended(
+        clip(0, 1000),
+        kind === 'explicit' ? [clip(3000, 4000)] : [],
+        {
+          now: new Date(5000),
+          load,
+          advance,
+        },
+      );
+      if (kind === 'explicit') {
+        await continuation.continueNext(async () => {
+          throw failure;
+        });
+      }
+      const time = new Date(kind === 'explicit' ? 3000 : 1000);
+      expect(continuation.getState()).toMatchObject({
+        state: 'error',
+        time,
+        error: { category: 'network' },
+      });
+      await continuation.continueNext(advance);
+      expect(advance).toHaveBeenCalledExactlyOnceWith(time, expect.any(Function));
+      expect(continuation.getState()).toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
+  },
+);
+
+it.each(['gap', 'end'])(
+  'repeats failed discovery and recovers into %s',
+  async (state) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const continuation = new RecordingContinuation(vi.fn());
+      const load = vi
+        .fn()
+        .mockRejectedValueOnce(new ShinobiArchiveError('network', 'discovery'))
+        .mockResolvedValue(state === 'gap' ? [clip(3000, 4000)] : []);
+      const advance = vi.fn();
+      await continuation.ended(clip(0, 1000), [], {
+        now: new Date(5000),
+        load,
+        advance,
+      });
+      await continuation.continueNext(advance);
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(advance).not.toHaveBeenCalled();
+      expect(continuation.getState()).toMatchObject({ state });
+    } finally {
+      warn.mockRestore();
+    }
+  },
+);
 
 it('advances once at a contiguous boundary and keeps an overlap at the same instant', async () => {
   const changed = vi.fn();
@@ -119,7 +187,7 @@ it('rejects unknown or failed metadata and expires stalled work without acceptin
     load: async () => null,
     advance,
   });
-  expect(continuation.getState()).toEqual({ state: 'error' });
+  expect(continuation.getState()).toMatchObject({ state: 'error' });
   continuation.cancel();
   vi.useFakeTimers();
   try {
@@ -134,7 +202,7 @@ it('rejects unknown or failed metadata and expires stalled work without acceptin
     });
     await vi.advanceTimersByTimeAsync(10000);
     await pending;
-    expect(continuation.getState()).toEqual({ state: 'error' });
+    expect(continuation.getState()).toMatchObject({ state: 'error' });
     assert(finish);
     finish([clip(1000, 2000)]);
     await Promise.resolve();
@@ -179,7 +247,7 @@ it.each(['discovery', 'advance'])(
       );
       expect(warn).toHaveBeenCalledWith(
         expect.objectContaining({ message: 'Recording continuation failed' }),
-        { stage, reason: 'request_failed' },
+        expect.objectContaining({ stage, reason: 'request_failed' }),
       );
       expect(JSON.stringify(warn.mock.calls)).not.toContain('SECRET');
     } finally {
@@ -203,9 +271,9 @@ it('categorizes a timed-out explicit continuation', async () => {
     await work;
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Recording continuation failed' }),
-      { stage: 'advance', reason: 'timeout' },
+      expect.objectContaining({ stage: 'advance', reason: 'timeout' }),
     );
-    expect(continuation.getState()).toEqual({ state: 'error' });
+    expect(continuation.getState()).toMatchObject({ state: 'error' });
   } finally {
     vi.useRealTimers();
     warn.mockRestore();
@@ -261,7 +329,9 @@ it.each([false, true])(
     assert(fail);
     fail(new Error('Failed'));
     await pending;
-    expect(continuation.getState()).toEqual(canceled ? null : { state: 'error' });
+    expect(continuation.getState()).toEqual(
+      canceled ? null : expect.objectContaining({ state: 'error' }),
+    );
     warn.mockRestore();
   },
 );
