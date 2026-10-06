@@ -5,6 +5,7 @@ const componentIDSchema = z.string().regex(/^[A-Za-z0-9_-]+$/);
 export const archiveIdentitySchema = z.object({
   shinobi_recordings_entry: componentIDSchema,
   shinobi_recordings_monitor: componentIDSchema,
+  shinobi_recordings_download: z.boolean().optional(),
   shinobi_recordings_timezone: z.string().min(1).optional(),
 });
 export type ArchiveIdentity = z.infer<typeof archiveIdentitySchema>;
