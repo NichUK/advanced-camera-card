@@ -335,7 +335,7 @@ export class TimelineDataSource {
           ...(this._showRecordings ? [this._refreshRecordings(window, epoch)] : []),
         ]);
         if (bounded) {
-          await withTimeout(work, 10000, new Error('Recording metadata timeout'));
+          await withTimeout(work, 10000, new Error('Timeline metadata timeout'));
         } else {
           await work;
         }

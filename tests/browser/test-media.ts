@@ -1,6 +1,6 @@
 import { delay, http, HttpResponse } from 'msw';
 import { setupWorker } from 'msw/browser';
-import { beforeAll } from 'vitest';
+import { afterAll, beforeAll } from 'vitest';
 
 import { createFixtureURL, SNAPSHOT_FIXTURE_FILENAME } from './fixtures';
 
@@ -210,5 +210,13 @@ export const useTestMedia = (): void => {
     // above -- is left alone.
     await worker.start({ onUnhandledRequest: 'bypass', quiet: true });
     inUse = true;
+  });
+  afterAll(() => {
+    // The worker registration is shared by same-origin test frames. Retired
+    // frames must relinquish interception before the next file activates it.
+    worker.stop();
+    inUse = false;
+    requestCounts.clear();
+    requestWaiters.clear();
   });
 };
