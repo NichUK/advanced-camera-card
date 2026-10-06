@@ -1,6 +1,6 @@
 import { Timer } from '../timer';
 
-/** Bound a caller's wait; late completion must not mutate its current view. */
+/** Bound the wait, without cancelling work; callers own abort/stale-result guards. */
 export const withTimeout = async <T>(
   work: Promise<T>,
   milliseconds: number,
