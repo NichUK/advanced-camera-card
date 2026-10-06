@@ -6,6 +6,7 @@ import { getBuildDefines } from './scripts/vite/build-defines.js';
 import { buildDate } from './scripts/vite/plugins/build-date.js';
 import { cleanDist } from './scripts/vite/plugins/clean-dist.js';
 import { facadeEntry } from './scripts/vite/plugins/facade-entry.js';
+import { shinobiPreview } from './scripts/vite/plugins/shinobi-preview.js';
 import { svgPath } from './scripts/vite/plugins/svg-path.js';
 import { PUBLIC_ENTRIES } from './scripts/vite/public-entries.js';
 
@@ -13,6 +14,7 @@ import { PUBLIC_ENTRIES } from './scripts/vite/public-entries.js';
 // `production`.
 export default defineConfig(({ mode }) => {
   const dev = mode === 'development';
+  const preview = mode === 'shinobi-preview';
 
   return {
     define: {
@@ -24,10 +26,13 @@ export default defineConfig(({ mode }) => {
     },
 
     plugins: [
+      ...(preview ? [shinobiPreview()] : []),
       cleanDist(),
       svgPath(),
       buildDate(),
-      facadeEntry({ publicFileNames: PUBLIC_ENTRIES }),
+      facadeEntry({
+        publicFileNames: preview ? ['shinobi-camera-card.js'] : PUBLIC_ENTRIES,
+      }),
       visualizer({ filename: 'visualizations/treemap.html', template: 'treemap' }),
     ],
 
@@ -71,7 +76,7 @@ export default defineConfig(({ mode }) => {
     build: {
       lib: { entry: 'src/card.ts', formats: ['es'] },
       target: getBrowserTargets(),
-      outDir: 'dist',
+      outDir: preview ? 'dist-preview' : 'dist',
 
       // `cleanDist` removes what an earlier build left instead, once the new
       // output is written, so the directory a running Home Assistant serves the
