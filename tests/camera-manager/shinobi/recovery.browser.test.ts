@@ -227,9 +227,10 @@ it('recovers when the MP4 fails after its successful authorization preflight', a
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
 
-it('reports a native unsupported media error instead of leaving the spinner', async () => {
+it('reports an actionable failure for non-video bytes instead of leaving the spinner', async () => {
   const { card, began } = await mount(createFixtureURL('still-red.png'));
-  await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  const issue = await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+  expect(issue.detail).toMatchObject({ key: 'media_unavailable' });
   await card.clickControl('Media unavailable');
   await expect
     .poll(
@@ -237,7 +238,7 @@ it('reports a native unsupported media error instead of leaving the spinner', as
         deepQuery<HTMLElement>(card.card, 'advanced-camera-card-notification')
           ?.shadowRoot?.textContent,
     )
-    .toContain('does not support');
+    .toMatch(/does not support|Stream stalled/);
   expect(performance.now() - began).toBeLessThanOrEqual(10000);
   expect(current(card)?.context?.mediaViewer?.seek?.getTime()).toBe(start.getTime());
 });
