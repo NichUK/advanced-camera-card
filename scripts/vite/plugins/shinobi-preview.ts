@@ -45,9 +45,11 @@ export const bundledNotices = (
           resolved = true;
           const name = `${document.name}@${document.version}`;
           if (!notices.has(name)) {
-            const files = readdirSync(directory).filter((file) =>
-              /^(?:.*-)?(?:licen[cs]e|copying|notice)(?:[._-]|$)/i.test(file),
-            );
+            const files = readdirSync(directory)
+              .filter((file) =>
+                /^(?:.*-)?(?:licen[cs]e|copying|notice)(?:[._-]|$)/i.test(file),
+              )
+              .sort();
             if (!files.length) {
               const record: unknown = provenance.find(
                 (entry: unknown) =>

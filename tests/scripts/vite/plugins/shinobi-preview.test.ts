@@ -59,6 +59,9 @@ it('includes packaged licence variants and exact-version offline notices, failin
     const result = bundledNotices([module], notices);
     expect(result).toContain('packaged MIT terms');
     expect(result).toContain('alternate MIT notice');
+    expect(result.indexOf('packaged MIT terms')).toBeLessThan(
+      result.indexOf('alternate MIT notice'),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
