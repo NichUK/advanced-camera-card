@@ -992,6 +992,13 @@
     "invalid_time_zone": "The recording timezone is invalid. Check the integration configuration.",
     "nonexistent_local_time": "This local time does not exist because the clocks move forward. Choose another time.",
     "select_offset": "This time occurs twice. Choose its UTC offset.",
-    "select_date": "Choose date"
+    "select_date": "Choose date",
+    "recording_coverage_loading": "Checking recording coverage...",
+    "recording_coverage_complete": "Recording coverage checked. Unshaded areas are gaps.",
+    "recording_coverage_error": "Recording coverage unavailable. Choose a time to retry.",
+    "viewport_previous": "Earlier",
+    "viewport_next": "Later",
+    "viewport_in": "Zoom in",
+    "viewport_out": "Zoom out"
   }
 }

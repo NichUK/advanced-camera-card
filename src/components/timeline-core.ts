@@ -208,6 +208,26 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
           ? 'timeline-tools zoned'
           : 'timeline-tools'}
       >
+        ${this._controller.getRecordingCoverageState()
+          ? html`<span role="status" aria-live="polite"
+              >${localize(
+                `timeline.recording_coverage_${this._controller.getRecordingCoverageState()}`,
+              )}</span
+            >`
+          : ''}
+        ${this._controller.getDatePickerTimeZone()
+          ? (['previous', 'next', 'in', 'out'] as const).map(
+              (action) =>
+                html`<button
+                  type="button"
+                  aria-label=${localize(`timeline.viewport_${action}`)}
+                  title=${localize(`timeline.viewport_${action}`)}
+                  @click=${() => this._controller.adjustTimelineWindow(action)}
+                >
+                  ${localize(`timeline.viewport_${action}`)}
+                </button>`,
+            )
+          : ''}
         ${this._controller.shouldSupportSeeking()
           ? html` <advanced-camera-card-icon
               .icon=${{ icon: panIcon }}
