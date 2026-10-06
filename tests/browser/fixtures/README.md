@@ -52,3 +52,7 @@ ffmpeg -hide_banner -loglevel error -f lavfi \
 
 This establishes supported-fixture decoding, dimensions and seek behavior.
 It does not establish decoding of original Clear HEVC/AAC recordings.
+
+## Shinobi one-second handoff fixture
+
+shinobi-4k-one-second.mp4 is the first second of the synthetic blue H.264 fixture above, copied without re-encoding using FFmpeg 8.0.1 with -t 1 -c copy -movflags +faststart. It remains 3840x2160/5 fps with duration exactly one second. SHA-256: c64892809cd584af6be60941ce9d85f3eec33429209a20dce968b66a9fafb2d0. Contiguous one-second metadata matches its duration so browser handoffs end naturally; no camera footage is included.

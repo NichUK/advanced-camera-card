@@ -52,3 +52,13 @@
 
   flex: 0 0 100%;
 }
+
+.recording-continuation {
+  padding: 8px;
+  background: var(--card-background-color);
+  color: var(--primary-text-color);
+  button {
+    min-height: 32px;
+    margin-inline-start: 8px;
+  }
+}
