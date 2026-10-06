@@ -41,7 +41,7 @@
     "source": "https://desandro.mit-license.org/",
     "source_readme": "https://github.com/desandro/masonry/blob/3b0883cf4a4a046896719b9cf282ea74be7ffecd/README.md",
     "snapshot_date": "2026-10-06",
-    "sha256": "493ee429994c0ebe7f30cea8c112d54f69e5358a6f5f64e497895502ab29f67e"
+    "sha256": "ce8b88e23d2a122e789cd9a714c5cdb5b173a97cc1481910ec417ea48807356a"
   },
   {
     "package": "get-size",
@@ -50,7 +50,7 @@
     "source": "https://desandro.mit-license.org/",
     "source_readme": "https://github.com/desandro/get-size/blob/6879e7f15b4b6e19ca392b6955edfa8d4aa6f787/README.md",
     "snapshot_date": "2026-10-06",
-    "sha256": "493ee429994c0ebe7f30cea8c112d54f69e5358a6f5f64e497895502ab29f67e"
+    "sha256": "ce8b88e23d2a122e789cd9a714c5cdb5b173a97cc1481910ec417ea48807356a"
   },
   {
     "package": "outlayer",
@@ -59,7 +59,7 @@
     "source": "https://desandro.mit-license.org/",
     "source_readme": "https://github.com/metafizzy/outlayer/blob/bf31c5748bf84fcc2c553d1199a6ecaf0ebd9878/README.md",
     "snapshot_date": "2026-10-06",
-    "sha256": "493ee429994c0ebe7f30cea8c112d54f69e5358a6f5f64e497895502ab29f67e"
+    "sha256": "ce8b88e23d2a122e789cd9a714c5cdb5b173a97cc1481910ec417ea48807356a"
   },
   {
     "package": "ev-emitter",
@@ -68,7 +68,7 @@
     "source": "https://desandro.mit-license.org/",
     "source_readme": "https://github.com/metafizzy/ev-emitter/blob/1baa3a03d8e07f665b0eb797661fcc2b0d2a5736/README.md",
     "snapshot_date": "2026-10-06",
-    "sha256": "493ee429994c0ebe7f30cea8c112d54f69e5358a6f5f64e497895502ab29f67e"
+    "sha256": "ce8b88e23d2a122e789cd9a714c5cdb5b173a97cc1481910ec417ea48807356a"
   },
   {
     "package": "fizzy-ui-utils",
@@ -77,7 +77,7 @@
     "source": "https://desandro.mit-license.org/",
     "source_readme": "https://github.com/metafizzy/fizzy-ui-utils/blob/72feb9fc3d6de25696291941121bb3ec2db8221e/README.md",
     "snapshot_date": "2026-10-06",
-    "sha256": "493ee429994c0ebe7f30cea8c112d54f69e5358a6f5f64e497895502ab29f67e"
+    "sha256": "ce8b88e23d2a122e789cd9a714c5cdb5b173a97cc1481910ec417ea48807356a"
   },
   {
     "package": "desandro-matches-selector",
@@ -86,6 +86,6 @@
     "source": "https://desandro.mit-license.org/",
     "source_readme": "https://github.com/desandro/matches-selector/blob/42ee1cbab7469454d140bdab04d2ceed9c68b85e/README.md",
     "snapshot_date": "2026-10-06",
-    "sha256": "493ee429994c0ebe7f30cea8c112d54f69e5358a6f5f64e497895502ab29f67e"
+    "sha256": "ce8b88e23d2a122e789cd9a714c5cdb5b173a97cc1481910ec417ea48807356a"
   }
 ]
