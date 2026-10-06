@@ -13,6 +13,7 @@
     "lovelace"
   ],
   "type": "module",
+  "packageManager": "yarn@4.9.1",
   "repository": "github:dermotduffy/advanced-camera-card",
   "author": "Dermot Duffy <dermot.duffy@gmail.com>",
   "license": "MIT",
