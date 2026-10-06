@@ -25,7 +25,7 @@ let inUse = false;
 /**
  * See the worker below for what `responses` and `repeat` ask it to do.
  */
-export const createTestMediaURL = (
+const createTestMediaURL = (
   responses: number[],
   repeat = false,
   filename: string = SNAPSHOT_FIXTURE_FILENAME,
