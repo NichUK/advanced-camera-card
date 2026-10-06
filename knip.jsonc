@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/knip/schema-jsonc.json",
 
+  // Dedicated suites are invoked explicitly; the desktop one requires a private
+  // bootstrap and must not be evaluated by the ordinary unit-test scanner.
+  "entry": ["vitest.*.config.ts", "tests/**/*.acceptance.ts"],
+
   // Vendored docsify assets, loaded by `<script src>` tags in `docs/index.html`.
   "ignore": ["docs/js/**"],
 
