@@ -1,0 +1,125 @@
+{
+  "observations": [
+    {
+      "gap": false,
+      "milliseconds": 572.3999999761581,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 529.5,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 600.2000000476837,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 555.5,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 534,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 535.8000000715256,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 551.6000000238419,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 585.5,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 531.2000000476837,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 513.2999999523163,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 526,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 510.10000002384186,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 538.4000000953674,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 561.1000000238419,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 532.3999999761581,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 744.2999999523163,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 551.2000000476837,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 528.8999999761581,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 525.2000000476837,
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "gap": false,
+      "milliseconds": 577.5,
+      "width": 3840,
+      "height": 2160
+    }
+  ],
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
+}
