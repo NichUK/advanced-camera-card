@@ -3,6 +3,12 @@ import { AdvancedCameraCardError } from '../types.js';
 
 class CameraInitializationError extends AdvancedCameraCardError {}
 
+export class ShinobiInitializationError extends CameraInitializationError {
+  constructor() {
+    super(localize('error.camera_initialization_shinobi'));
+  }
+}
+
 export class CameraNoEngineError extends CameraInitializationError {
   constructor(context?: unknown) {
     super(localize('error.no_camera_engine'), context);

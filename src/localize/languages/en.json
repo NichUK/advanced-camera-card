@@ -114,6 +114,7 @@
         "generic": "Generic",
         "motioneye": "MotionEye",
         "reolink": "Reolink",
+        "shinobi": "Shinobi recordings",
         "tplink": "TP-Link"
       },
       "frigate": {
@@ -828,6 +829,7 @@
     "call_unavailable_heading": "Two-way audio unavailable",
     "camera_initialization": "Camera initialization failed",
     "camera_initialization_reolink": "Could not initialize Reolink camera",
+    "camera_initialization_shinobi": "Could not initialize Shinobi recordings camera",
     "configuration_error": "Configuration error",
     "could_not_create_elements": "Could not create picture elements",
     "diagnostics": "Card diagnostics. Please review for confidential information prior to sharing",
