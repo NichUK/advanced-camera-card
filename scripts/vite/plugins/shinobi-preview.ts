@@ -7,7 +7,16 @@ import type { Plugin } from 'vite';
 
 import { BUILD_DATE_PLACEHOLDER } from './build-date.js';
 
-const bundledNotices = (modules: string[]): string => {
+export const bundledNotices = (
+  modules: string[],
+  noticeRoot = path.resolve('scripts/vite/notices'),
+): string => {
+  const provenance: unknown = JSON.parse(
+    readFileSync(path.join(noticeRoot, 'provenance.json'), 'utf8'),
+  );
+  if (!Array.isArray(provenance)) {
+    throw new Error('Bundled licence provenance must be an array');
+  }
   const notices = new Map<string, string>();
   for (const module of modules) {
     if (!module.includes('node_modules/')) {
@@ -22,15 +31,42 @@ const bundledNotices = (modules: string[]): string => {
           typeof document === 'object' &&
           document !== null &&
           'name' in document &&
-          typeof document.name === 'string'
+          typeof document.name === 'string' &&
+          'version' in document &&
+          typeof document.version === 'string'
         ) {
-          const name = document.name;
+          const name = `${document.name}@${document.version}`;
           if (!notices.has(name)) {
             const files = readdirSync(directory).filter((file) =>
-              /^(licen[cs]e|copying|notice)(\.|$)/i.test(file),
+              /^(?:.*-)?(?:licen[cs]e|copying|notice)(?:[._-]|$)/i.test(file),
             );
             if (!files.length) {
-              throw new Error(`Bundled licence notice unavailable: ${name}`);
+              const record: unknown = provenance.find(
+                (entry: unknown) =>
+                  typeof entry === 'object' &&
+                  entry !== null &&
+                  'package' in entry &&
+                  entry.package === document.name &&
+                  'version' in entry &&
+                  entry.version === document.version,
+              );
+              if (
+                typeof record !== 'object' ||
+                record === null ||
+                !('file' in record) ||
+                typeof record.file !== 'string' ||
+                path.basename(record.file) !== record.file ||
+                !('source' in record) ||
+                typeof record.source !== 'string' ||
+                !record.source.startsWith('https://')
+              ) {
+                throw new Error(`Bundled licence notice unavailable: ${name}`);
+              }
+              notices.set(
+                name,
+                `Source: ${record.source}\n${readFileSync(path.join(noticeRoot, record.file), 'utf8')}`,
+              );
+              break;
             }
             notices.set(
               name,
@@ -111,6 +147,9 @@ export const shinobiPreview = (): Plugin => {
           output.type === 'chunk' ? Object.keys(output.modules) : [],
         );
         const notices = bundledNotices(modules);
+        files['THIRD-PARTY-NOTICES.txt'] = createHash('sha256')
+          .update(notices)
+          .digest('hex');
         this.emitFile({
           type: 'asset',
           fileName: 'THIRD-PARTY-NOTICES.txt',

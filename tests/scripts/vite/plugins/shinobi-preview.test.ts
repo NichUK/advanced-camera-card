@@ -1,6 +1,51 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { expect, it } from 'vitest';
 
-import { namespaceShinobiPreview } from '../../../../scripts/vite/plugins/shinobi-preview';
+import {
+  bundledNotices,
+  namespaceShinobiPreview,
+} from '../../../../scripts/vite/plugins/shinobi-preview';
+
+it('includes packaged licence variants and exact-version offline notices, failing closed on an unrecorded version', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'shinobi-notices-'));
+  try {
+    const dependency = path.join(root, 'node_modules', 'fixture');
+    const notices = path.join(root, 'notices');
+    mkdirSync(dependency, { recursive: true });
+    mkdirSync(notices);
+    writeFileSync(path.join(notices, 'fixture.txt'), 'offline MIT terms');
+    writeFileSync(
+      path.join(notices, 'provenance.json'),
+      JSON.stringify([
+        {
+          package: 'fixture',
+          version: '1.0.0',
+          file: 'fixture.txt',
+          source: 'https://example.invalid/pinned/LICENSE',
+        },
+      ]),
+    );
+    const module = path.join(dependency, 'index.js').replaceAll('\\', '/');
+    const manifest = path.join(dependency, 'package.json');
+    writeFileSync(manifest, JSON.stringify({ name: 'fixture', version: '1.0.0' }));
+    expect(bundledNotices([module, module], notices)).toContain('fixture@1.0.0');
+    expect(bundledNotices([module], notices)).toContain('offline MIT terms');
+    writeFileSync(manifest, JSON.stringify({ name: 'fixture', version: '2.0.0' }));
+    expect(() => bundledNotices([module], notices)).toThrow(
+      'unavailable: fixture@2.0.0',
+    );
+    writeFileSync(path.join(dependency, 'LICENSE-MIT'), 'packaged MIT terms');
+    writeFileSync(path.join(dependency, 'MIT-License.txt'), 'alternate MIT notice');
+    const result = bundledNotices([module], notices);
+    expect(result).toContain('packaged MIT terms');
+    expect(result).toContain('alternate MIT notice');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 it('cannot identify or delete the baseline legacy dashboard resource', () => {
   expect(namespaceShinobiPreview('frigate-hass-card.js')).toBe(

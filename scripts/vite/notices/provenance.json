@@ -1,0 +1,80 @@
+[
+  {
+    "package": "@lit-labs/ssr-dom-shim",
+    "version": "1.2.0",
+    "file": "lit-labs-ssr-dom-shim-1.2.0.txt",
+    "source": "https://github.com/lit/lit/blob/b4e3c0ef472b89aee09c1ecf194e2bbb9b1441f7/LICENSE"
+  },
+  {
+    "package": "embla-carousel",
+    "version": "8.6.0",
+    "file": "embla-carousel-8.6.0.txt",
+    "source": "https://github.com/davidjerleke/embla-carousel/blob/0fe65834136f1aa35e4c1a4a477e5ccb4bb5ee54/LICENSE"
+  },
+  {
+    "package": "embla-carousel-wheel-gestures",
+    "version": "8.0.1",
+    "file": "embla-carousel-wheel-gestures-8.0.1.txt",
+    "source": "https://github.com/xiel/embla-carousel-wheel-gestures/blob/d60aecc24171ebcbd5087e011e47946e88fbe95d/LICENSE"
+  },
+  {
+    "package": "web-dialog",
+    "version": "0.0.11",
+    "file": "web-dialog-0.0.11.txt",
+    "source": "https://github.com/andreasbm/web-dialog/blob/e9daf11562054b94e773e8bbb39d24f6a900bf3a/LICENSE.md"
+  },
+  {
+    "package": "@a11y/focus-trap",
+    "version": "1.0.5",
+    "file": "a11y-focus-trap-1.0.5.txt",
+    "source": "https://github.com/andreasbm/focus-trap/blob/04374f2a95978c7ceb42efcc7cd5abdb6e76e953/LICENSE.md"
+  },
+  {
+    "package": "masonry-layout",
+    "version": "4.2.2",
+    "file": "masonry-layout-4.2.2.txt",
+    "source": "https://desandro.mit-license.org/",
+    "source_readme": "https://github.com/desandro/masonry/blob/3b0883cf4a4a046896719b9cf282ea74be7ffecd/README.md",
+    "snapshot_date": "2026-10-06"
+  },
+  {
+    "package": "get-size",
+    "version": "2.0.3",
+    "file": "get-size-2.0.3.txt",
+    "source": "https://desandro.mit-license.org/",
+    "source_readme": "https://github.com/desandro/get-size/blob/6879e7f15b4b6e19ca392b6955edfa8d4aa6f787/README.md",
+    "snapshot_date": "2026-10-06"
+  },
+  {
+    "package": "outlayer",
+    "version": "2.1.1",
+    "file": "outlayer-2.1.1.txt",
+    "source": "https://desandro.mit-license.org/",
+    "source_readme": "https://github.com/metafizzy/outlayer/blob/bf31c5748bf84fcc2c553d1199a6ecaf0ebd9878/README.md",
+    "snapshot_date": "2026-10-06"
+  },
+  {
+    "package": "ev-emitter",
+    "version": "1.1.1",
+    "file": "ev-emitter-1.1.1.txt",
+    "source": "https://desandro.mit-license.org/",
+    "source_readme": "https://github.com/metafizzy/ev-emitter/blob/1baa3a03d8e07f665b0eb797661fcc2b0d2a5736/README.md",
+    "snapshot_date": "2026-10-06"
+  },
+  {
+    "package": "fizzy-ui-utils",
+    "version": "2.0.7",
+    "file": "fizzy-ui-utils-2.0.7.txt",
+    "source": "https://desandro.mit-license.org/",
+    "source_readme": "https://github.com/metafizzy/fizzy-ui-utils/blob/72feb9fc3d6de25696291941121bb3ec2db8221e/README.md",
+    "snapshot_date": "2026-10-06"
+  },
+  {
+    "package": "desandro-matches-selector",
+    "version": "2.0.2",
+    "file": "desandro-matches-selector-2.0.2.txt",
+    "source": "https://desandro.mit-license.org/",
+    "source_readme": "https://github.com/desandro/matches-selector/blob/42ee1cbab7469454d140bdab04d2ceed9c68b85e/README.md",
+    "snapshot_date": "2026-10-06"
+  }
+]
