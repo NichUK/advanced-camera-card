@@ -118,7 +118,16 @@ export const namespaceShinobiPreview = (source: string): string =>
     .replace(/\b(side-drawer|focus-trap|web-dialog)\b/g, 'shinobi-preview-$1')
     .replace(/\badvancedCameraCards\b/g, 'shinobiCameraCards');
 
+export const renderShinobiPreview = (source: string, commitDate: string): string =>
+  namespaceShinobiPreview(source).replaceAll(
+    BUILD_DATE_PLACEHOLDER,
+    new Date(commitDate).toISOString(),
+  );
+
 export const shinobiPreview = (): Plugin => {
+  if (process.env.RELEASE_VERSION !== undefined) {
+    throw new Error('Preview builds must not set RELEASE_VERSION');
+  }
   const commitDate = execFileSync('git', ['log', '-1', '--format=%cI'], {
     encoding: 'utf8',
   }).trim();
@@ -126,10 +135,7 @@ export const shinobiPreview = (): Plugin => {
     name: 'shinobi-preview-namespace',
     renderChunk(code) {
       return {
-        code: namespaceShinobiPreview(code).replaceAll(
-          BUILD_DATE_PLACEHOLDER,
-          new Date(commitDate).toISOString(),
-        ),
+        code: renderShinobiPreview(code, commitDate),
         map: null,
       };
     },

@@ -3,12 +3,37 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
+import { BUILD_DATE_PLACEHOLDER } from '../../../../scripts/vite/plugins/build-date';
 import {
   bundledNotices,
   namespaceShinobiPreview,
+  renderShinobiPreview,
+  shinobiPreview,
 } from '../../../../scripts/vite/plugins/shinobi-preview';
+
+it('rejects ambient release overrides before creating a preview build', () => {
+  try {
+    for (const version of ['v1.2.3', '']) {
+      vi.stubEnv('RELEASE_VERSION', version);
+      expect(() => shinobiPreview()).toThrow('must not set RELEASE_VERSION');
+    }
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
+it('replaces the build timestamp independently of the embedded Git timestamp', () => {
+  const gitDate = '2020-01-01T00:00:00.000Z';
+  const commitDate = '2026-10-06T02:00:00+02:00';
+  expect(
+    renderShinobiPreview(
+      `const gitDate="${gitDate}"; const buildDate="${BUILD_DATE_PLACEHOLDER}";`,
+      commitDate,
+    ),
+  ).toBe(`const gitDate="${gitDate}"; const buildDate="2026-10-06T00:00:00.000Z";`);
+});
 
 it('includes packaged licence variants and exact-version offline notices, failing closed on an unrecorded version', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'shinobi-notices-'));
