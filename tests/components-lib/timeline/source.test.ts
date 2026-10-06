@@ -177,6 +177,39 @@ describe('TimelineDataSource', () => {
     vi.clearAllMocks();
   });
 
+  it('names an event-only timeout without claiming recording metadata failed', async () => {
+    const manager = createTestCameraManager();
+    const engine = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+    assert(engine);
+    vi.spyOn(engine, 'getEngineType').mockReturnValue(Engine.Shinobi);
+    vi.mocked(manager.executeMediaQueries).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    const source = createSource(
+      manager,
+      mock<FoldersManager>(),
+      mock<ConditionStateManagerReadonlyInterface>(),
+      cameraEventsQuery,
+      false,
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    try {
+      const refresh = source.refresh({ start, end });
+      await vi.advanceTimersByTimeAsync(10000);
+      await refresh;
+      expect(source.getRecordingCoverageState()).toBeNull();
+      expect(
+        warn.mock.calls
+          .flat()
+          .some((value) => String(value).includes('Timeline metadata timeout')),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+  });
+
   it.each(['failure', 'timeout', 'stale-failure'])(
     'keeps verified quiet coverage independent of ancillary %s',
     async (mode) => {
