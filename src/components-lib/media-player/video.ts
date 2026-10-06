@@ -11,7 +11,7 @@ import type {
 import { hideMediaControlsTemporarily, setControlsOnVideo } from '../../utils/controls';
 import { fireAdvancedCameraCardEvent } from '../../utils/fire-advanced-camera-card-event';
 import { screenshotVideo } from '../../utils/screenshot';
-import { FrameStallWatchdog } from './frame-stall-watchdog';
+import { FRAME_STALL_SECONDS, FrameStallWatchdog } from './frame-stall-watchdog';
 
 export class VideoMediaPlayerController
   implements MediaPlayerController, ReactiveController
@@ -19,6 +19,7 @@ export class VideoMediaPlayerController
   private _host: LitElement;
   private _getVideoCallback: () => HTMLVideoElement | null;
   private _getControlsDefaultCallback: (() => boolean) | null;
+  private _getStallAfterSeconds: () => number;
 
   // The frame callback registration: the video it was made on and the handle to
   // cancel it with.
@@ -45,16 +46,19 @@ export class VideoMediaPlayerController
     },
     startSource: () => this._startFrameSource(),
     stopSource: () => this._stopFrameSource(),
+    getStallAfterSeconds: () => this._getStallAfterSeconds(),
   });
 
   constructor(
     host: LitElement,
     getVideoCallback: () => HTMLVideoElement | null,
     getControlsDefaultCallback?: () => boolean,
+    getStallAfterSeconds: () => number = () => FRAME_STALL_SECONDS,
   ) {
     this._host = host;
     this._getVideoCallback = getVideoCallback;
     this._getControlsDefaultCallback = getControlsDefaultCallback ?? null;
+    this._getStallAfterSeconds = getStallAfterSeconds;
 
     host.addController(this);
   }
