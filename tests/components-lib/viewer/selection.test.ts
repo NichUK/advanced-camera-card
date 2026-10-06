@@ -1,7 +1,10 @@
 import { expect, it } from 'vitest';
 
 import { ShinobiRecording } from '../../../src/camera-manager/shinobi/media';
-import { getViewerMediaIndex } from '../../../src/components-lib/viewer/selection';
+import {
+  getViewerMediaIndex,
+  isExactTimeGap,
+} from '../../../src/components-lib/viewer/selection';
 import { ViewMedia, ViewMediaType } from '../../../src/view/item';
 
 it('leaves a completed archive gap empty while retaining legacy viewer selection', () => {
@@ -21,4 +24,10 @@ it('leaves a completed archive gap empty while retaining legacy viewer selection
   expect(getViewerMediaIndex([legacy], null)).toBe(0);
   expect(getViewerMediaIndex([clip, legacy], null)).toBe(1);
   expect(getViewerMediaIndex([legacy, clip], null)).toBe(0);
+  expect(isExactTimeGap([clip], new Date(60000))).toBe(true);
+  expect(isExactTimeGap([clip], new Date(0))).toBe(false);
+  expect(isExactTimeGap([clip])).toBe(false);
+  expect(isExactTimeGap(null, new Date(0))).toBe(false);
+  expect(isExactTimeGap([], new Date(0))).toBe(false);
+  expect(isExactTimeGap([clip, legacy], new Date(0))).toBe(false);
 });

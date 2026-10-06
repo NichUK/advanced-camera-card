@@ -39,4 +39,6 @@ provide the initial implementation base.
 
 Multi-file export and a compatibility viewing stream are later features.
 
-For the preview, the timeline date picker selects and plays the exact instant. Keep the mini timeline visible during playback and pending requests with media_viewer.controls.timeline.mode: below. The current input uses the browser display timezone; explicit site-timezone and DST disambiguation are SHI-06. Synthetic H.264 browser performance is documented in evidence/SHI-05/validation.md; original Clear HEVC and physical iPhone acceptance remain open.
+For the preview, the timeline date picker selects and plays the exact instant. Keep the mini timeline visible during playback and pending requests with media_viewer.controls.timeline.mode: below. The input uses the labelled recording timezone and requires an explicit UTC offset for a repeated local hour. Synthetic H.264 browser performance is documented in evidence/SHI-05/validation.md; original Clear HEVC and physical iPhone acceptance remain open.
+
+SHI-06 adds a visible recording-time input using the archive camera's site timezone (HA timezone for older adapters or a mixed site-zone view). Recording-input and browser-axis zones are labelled separately. Nonexistent local times show an explanation; repeated times require an explicit UTC offset. A confirmed gap shows No recording covers the selected time. Overlaps prefer the longest covering file, then earliest start and lexicographic opaque ID for ties. Evidence: evidence/SHI-06/time-resolution.md.

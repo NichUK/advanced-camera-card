@@ -1,5 +1,14 @@
 import type { ViewItem, ViewMedia } from '../../view/item';
 
+export const isExactTimeGap = (
+  media: readonly ViewMedia[] | null,
+  target?: Date,
+): boolean =>
+  !!target &&
+  !!media?.length &&
+  media.every((item) => item.requiresExactTimeSelection()) &&
+  !media.some((item) => item.includesTime(target));
+
 export const getViewerMediaIndex = (
   media: readonly ViewMedia[] | null,
   selected: ViewItem | null,

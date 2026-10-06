@@ -15,6 +15,7 @@ import {
 
 import type { CameraManager } from '../../camera-manager/manager';
 import { rangesOverlap } from '../../camera-manager/range';
+import { ShinobiCamera } from '../../camera-manager/shinobi/camera';
 import { Engine } from '../../camera-manager/types';
 import { convertRangeToCacheFriendlyTimes } from '../../camera-manager/utils/range-to-cache-friendly';
 import type { FoldersManager } from '../../card-controller/folders/manager';
@@ -311,6 +312,28 @@ export class TimelineController {
         });
       }
     }
+  }
+
+  public getDatePickerTimeZone(): string | null {
+    const view = this._viewManagerEpoch?.manager.getView();
+    const cameraIDs =
+      view?.query?.getAllCameraIDs() ??
+      (view?.camera ? new Set([view.camera]) : this._source?.shape.getAllCameraIDs());
+    if (!cameraIDs?.size) {
+      return null;
+    }
+    const cameras = Array.from(cameraIDs).map((id) =>
+      this._cameraManager?.getStore().getCamera(id),
+    );
+    if (!cameras.every((camera) => camera instanceof ShinobiCamera)) {
+      return null;
+    }
+    const zones = new Set(
+      cameras.map((camera) => camera.getArchive()?.shinobi_recordings_timezone),
+    );
+    return zones.size === 1 && zones.has(undefined) === false
+      ? Array.from(zones)[0] ?? null
+      : this._hass?.config.time_zone ?? null;
   }
 
   public shouldSupportSeeking(): boolean {

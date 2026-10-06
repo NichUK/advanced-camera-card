@@ -240,3 +240,10 @@ div.vis-tooltip {
 .timeline-tools * {
   cursor: pointer;
 }
+
+.timeline-tools.zoned {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  background-color: var(--advanced-camera-card-timeline-background);
+}

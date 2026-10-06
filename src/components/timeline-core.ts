@@ -203,7 +203,11 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
       class="timeline"
       ${ref(this._refTimeline)}
     >
-      <div class="timeline-tools">
+      <div
+        class=${this._controller.getDatePickerTimeZone() !== null
+          ? 'timeline-tools zoned'
+          : 'timeline-tools'}
+      >
         ${this._controller.shouldSupportSeeking()
           ? html` <advanced-camera-card-icon
               .icon=${{ icon: panIcon }}
@@ -214,6 +218,7 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
             </advanced-camera-card-icon>`
           : ''}
         <advanced-camera-card-date-picker
+          .timeZone=${this._controller.getDatePickerTimeZone() ?? undefined}
           ${ref(this._refDatePicker)}
           @advanced-camera-card:date-picker:change=${(
             ev: CustomEvent<DatePickerEvent>,

@@ -32,6 +32,7 @@ const mount = async (
         attributes: {
           shinobi_recordings_entry: 'preview',
           shinobi_recordings_monitor: 'garden',
+          shinobi_recordings_timezone: 'Europe/Paris',
         },
       },
     },
@@ -102,7 +103,15 @@ const choose = async (
   assert(picker);
   // Exercise the rendered native input's change boundary. The OS calendar
   // popup itself is outside this browser harness.
-  picker.value = instant.toLocaleString('sv-SE').replace(' ', 'T').slice(0, 16);
+  const timeZone = core.shadowRoot?.querySelector(
+    'advanced-camera-card-date-picker',
+  )?.timeZone;
+  expect(timeZone).toBe('Europe/Paris');
+  expect(getComputedStyle(picker).visibility).toBe('visible');
+  picker.value = instant
+    .toLocaleString('sv-SE', { timeZone })
+    .replace(' ', 'T')
+    .slice(0, 16);
   let chosen: Date | null = null;
   card.card.addEventListener('advanced-camera-card:date-picker:change', (event) => {
     chosen = (event as CustomEvent<{ date: Date }>).detail.date;
@@ -130,12 +139,17 @@ const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement
   await card.events.waitForFirst('advanced-camera-card:media:loaded');
   const video = getSelectedVideo(card);
   assert(video);
-  await expect.poll(() => video.currentTime).toBeGreaterThanOrEqual(59);
+  await expect
+    .poll(() => video.currentTime, { timeout: 5000 })
+    .toBeGreaterThanOrEqual(59);
   expect(video.currentTime).toBeLessThanOrEqual(61);
   expect(video.videoWidth).toBe(3840);
   expect(video.videoHeight).toBe(2160);
   await expect
-    .poll(() => !video.seeking && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)
+    .poll(
+      () => !video.seeking && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
+      { timeout: 5000 },
+    )
     .toBe(true);
   return video;
 };
@@ -174,6 +188,13 @@ it('shows no selected recording in a complete gap', async () => {
     )
     .toBe(false);
   await expect.poll(() => deepQuery(card.card, 'video')).toBeNull();
+  await expect
+    .poll(
+      () =>
+        deepQuery(card.card, 'advanced-camera-card-notification-block')?.shadowRoot
+          ?.textContent ?? '',
+    )
+    .toContain('No recording covers the selected time.');
 });
 
 it('ignores late discovery after another time is selected', async () => {
