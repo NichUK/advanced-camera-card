@@ -184,6 +184,14 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
           dispatchMediaPauseEvent(this);
         }}
         @ended=${() => fireAdvancedCameraCardEvent(this, 'media:ended')}
+        @timeupdate=${() => {
+          if (this.archive) {
+            fireAdvancedCameraCardEvent(this, 'media:time-update', {
+              mediaID: this.targetID ?? null,
+              seconds: this._refVideo.value?.currentTime ?? Number.NaN,
+            });
+          }
+        }}
         @seeking=${() => fireAdvancedCameraCardEvent(this, 'media:seek-request')}
         @error=${() => this._archiveError()}
       >

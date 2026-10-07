@@ -182,6 +182,27 @@ const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement
 };
 
 const timings = { cold: [] as number[], warm: [] as number[] };
+it('shows the native playback position, advances it, retains it paused, and follows native seeking', async () => {
+  const card = await mount();
+  await choose(card, new Date('2026-10-02T12:35:00Z'));
+  const video = await waitForSelectedFrame(card);
+  const playhead = await card.waitForSelector<HTMLElement>('.playback_bar');
+  const first = playhead.getBoundingClientRect().left;
+  await expect.poll(() => playhead.getBoundingClientRect().left).toBeGreaterThan(first);
+  video.currentTime = 80;
+  await expect.poll(() => playhead.getBoundingClientRect().left).toBeGreaterThan(first);
+  video.pause();
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+  const paused = playhead.getBoundingClientRect().left;
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+  expect(playhead.getBoundingClientRect().left).toBe(paused);
+  video.currentTime = 20;
+  await expect.poll(() => playhead.getBoundingClientRect().left).toBeLessThan(paused);
+  expect(playhead.textContent).not.toBe('');
+  expect(getComputedStyle(playhead).pointerEvents).toBe('none');
+  await choose(card, new Date('2026-10-02T15:00:00Z'));
+  await expect.poll(() => deepQuery(card.card, '.playback_bar')).toBeNull();
+});
 it.each(['390px', '1664px'])(
   'keeps recording time and date labels inside the card at %s in both timeline views',
   async (width) => {

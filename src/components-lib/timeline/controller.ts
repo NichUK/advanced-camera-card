@@ -35,6 +35,8 @@ import type {
 } from '../../config/schema/common/controls/timeline';
 import { configDefaults } from '../../config/schema/types';
 import type { HomeAssistant } from '../../ha/types';
+import { localize } from '../../localize/localize';
+import type { MediaPlaybackTimeUpdate } from '../../types';
 import { stopEventFromActivatingCardWideActions } from '../../utils/action';
 import { formatDateAndTime, isHoverableDevice, isTruthy } from '../../utils/basic';
 import { findBestMediaTimeIndex } from '../../utils/find-best-media-time-index';
@@ -83,6 +85,7 @@ interface TimelineControllerOptions {
 }
 
 const TIMELINE_TARGET_BAR_ID = 'target_bar';
+const TIMELINE_PLAYBACK_BAR_ID = 'playback_bar';
 
 export class TimelineController {
   private _host: LitElement;
@@ -105,6 +108,8 @@ export class TimelineController {
 
   private _panMode: TimelinePanMode | null = null;
   private _targetBarVisible = false;
+  private _playbackBarVisible = false;
+  private _playbackPosition: { mediaID: string; time: Date } | null = null;
   private _itemClickAction: TimelineItemClickAction = 'play';
 
   private _thumbnailConfig: ThumbnailsControlBaseConfig | null = null;
@@ -137,6 +142,7 @@ export class TimelineController {
     this._timeline?.destroy();
     this._timeline = null;
     this._targetBarVisible = false;
+    this._playbackBarVisible = false;
     this._pointerHeld = null;
   }
 
@@ -227,6 +233,7 @@ export class TimelineController {
     }
 
     this._viewManagerEpoch = viewManagerEpoch ?? null;
+    this._updatePlaybackBar();
     await this._updateTimelineFromView();
   }
 
@@ -396,11 +403,69 @@ export class TimelineController {
       this._removeTargetBar();
     });
 
+    this._updatePlaybackBar();
     return true;
   }
 
   private _shouldShowGroups(): boolean {
     return !this._mini || (this._source?.groups.length ?? 0) > 1;
+  }
+
+  public handlePlaybackTimeUpdate(update: MediaPlaybackTimeUpdate): void {
+    const view = this._viewManagerEpoch?.manager.getView();
+    const media = view?.queryResults?.getSelectedResult();
+    const start = ViewItemClassifier.isMedia(media) ? media.getStartTime() : null;
+    // Preloaded neighbours and detached players must not move the playhead.
+    if (
+      !this._mini ||
+      !view?.isViewerView() ||
+      !update.mediaID ||
+      media?.getID() !== update.mediaID ||
+      !start ||
+      !Number.isFinite(update.seconds) ||
+      update.seconds < 0
+    ) {
+      return;
+    }
+    const time = new Date(start.getTime() + update.seconds * 1000);
+    if (!Number.isFinite(time.getTime())) {
+      return;
+    }
+    this._playbackPosition = { mediaID: update.mediaID, time };
+    this._updatePlaybackBar();
+  }
+
+  private _updatePlaybackBar(): void {
+    if (!this._timeline) {
+      return;
+    }
+    const view = this._viewManagerEpoch?.manager.getView();
+    const position = this._playbackPosition;
+    if (
+      !view?.isViewerView() ||
+      view.context?.loading?.query ||
+      !position ||
+      view.queryResults?.getSelectedResult()?.getID() !== position.mediaID
+    ) {
+      if (this._playbackBarVisible) {
+        this._timeline.removeCustomTime(TIMELINE_PLAYBACK_BAR_ID);
+        this._playbackBarVisible = false;
+      }
+      this._playbackPosition = null;
+      return;
+    }
+    if (this._playbackBarVisible) {
+      this._timeline.setCustomTime(position.time, TIMELINE_PLAYBACK_BAR_ID);
+    } else {
+      this._timeline.addCustomTime(position.time, TIMELINE_PLAYBACK_BAR_ID);
+      this._playbackBarVisible = true;
+    }
+    const label = formatDateAndTime(position.time, true);
+    this._timeline.setCustomTimeMarker?.(label, TIMELINE_PLAYBACK_BAR_ID);
+    this._timeline.setCustomTimeTitle(
+      `${localize('timeline.playback_position')}: ${label}`,
+      TIMELINE_PLAYBACK_BAR_ID,
+    );
   }
 
   private _setTargetBarAppropriately(targetTime: Date): void {

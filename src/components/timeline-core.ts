@@ -27,6 +27,7 @@ import type { CardWideConfig } from '../config/schema/types';
 import type { HomeAssistant } from '../ha/types';
 import { localize } from '../localize/localize';
 import timelineCoreStyle from '../scss/timeline-core.scss?inline';
+import type { MediaPlaybackTimeUpdate } from '../types';
 import { contentsChanged } from '../utils/basic';
 
 import './date-picker.js';
@@ -149,6 +150,10 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
   private _refDatePicker: Ref<AdvancedCameraCardDatePicker> = createRef();
   private _refTimeline: Ref<HTMLElement> = createRef();
   private _controller: TimelineController = new TimelineController(this);
+
+  public handlePlaybackTimeUpdate(update: MediaPlaybackTimeUpdate): void {
+    this._controller.handlePlaybackTimeUpdate(update);
+  }
 
   protected render(): TemplateResult | void {
     if (!this.hass || !this.timelineConfig) {

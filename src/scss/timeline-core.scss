@@ -197,6 +197,20 @@ div.vis-tooltip {
   // Prevent the mouse interacting with the custom time.
   pointer-events: none;
 }
+
+.playback_bar {
+  background-color: var(--error-color, #db4437);
+  width: 3px;
+  z-index: 25;
+  // This is an observation, not a draggable seek control.
+  pointer-events: none;
+}
+
+.playback_bar .vis-custom-time-marker {
+  background-color: var(--error-color, #db4437);
+  color: white;
+  font-size: 12px;
+}
 .target_bar .vis-custom-time-marker {
   background-color: var(--advanced-camera-card-timeline-background);
   color: var(--advanced-camera-card-timeline-text-color);

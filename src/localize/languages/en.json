@@ -1016,6 +1016,7 @@
     "where": "Where"
   },
   "timeline": {
+    "playback_position": "Playback position",
     "axis_time": "Timeline timezone",
     "recording_time": "Recording timezone",
     "recording_gap": "No recording covers the selected time.",
