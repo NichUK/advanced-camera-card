@@ -200,6 +200,30 @@ it('shows the native playback position, advances it, retains it paused, and foll
   await expect.poll(() => playhead.getBoundingClientRect().left).toBeLessThan(paused);
   expect(playhead.textContent).not.toBe('');
   expect(getComputedStyle(playhead).pointerEvents).toBe('none');
+  const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+    card.card,
+    'advanced-camera-card-timeline-core',
+  ).find((element) => element.getBoundingClientRect().height > 0);
+  assert(core);
+  for (const start of ['2026-10-02T12:34:19Z', '2026-10-02T12:32:21Z']) {
+    const lower = new Date(start);
+    core.viewManagerEpoch?.manager.setViewWithMergedContext({
+      timeline: {
+        window: { start: lower, end: new Date(lower.getTime() + 120000) },
+      },
+    });
+    await expect
+      .poll(() => {
+        const marker = playhead.querySelector<HTMLElement>('.vis-custom-time-marker');
+        if (!marker) {
+          return false;
+        }
+        const box = marker.getBoundingClientRect(),
+          bounds = core.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right;
+      })
+      .toBe(true);
+  }
   await choose(card, new Date('2026-10-02T15:00:00Z'));
   await expect.poll(() => deepQuery(card.card, '.playback_bar')).toBeNull();
 });

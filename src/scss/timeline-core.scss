@@ -211,6 +211,17 @@ div.vis-tooltip {
   color: white;
   font-size: 12px;
 }
+
+:host([playback-bar-marker-direction='right']) .playback_bar .vis-custom-time-marker {
+  left: 3px;
+}
+:host([playback-bar-marker-direction='left']) .playback_bar .vis-custom-time-marker {
+  right: 3px;
+}
+:host([playback-bar-marker-direction='center']) .playback_bar .vis-custom-time-marker {
+  left: 0px;
+  transform: translateX(-50%);
+}
 .target_bar .vis-custom-time-marker {
   background-color: var(--advanced-camera-card-timeline-background);
   color: var(--advanced-camera-card-timeline-text-color);

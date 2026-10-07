@@ -461,10 +461,29 @@ export class TimelineController {
       this._playbackBarVisible = true;
     }
     const label = formatDateAndTime(position.time, true);
+    this._setMarkerDirection(
+      position.time,
+      this._timeline.getWindow(),
+      'playback-bar-marker-direction',
+    );
     this._timeline.setCustomTimeMarker?.(label, TIMELINE_PLAYBACK_BAR_ID);
     this._timeline.setCustomTimeTitle(
       `${localize('timeline.playback_position')}: ${label}`,
       TIMELINE_PLAYBACK_BAR_ID,
+    );
+  }
+
+  private _setMarkerDirection(
+    time: Date,
+    window: TimelineWindow,
+    attribute: 'target-bar-marker-direction' | 'playback-bar-marker-direction',
+  ): void {
+    const proportion =
+      (time.getTime() - window.start.getTime()) /
+      (window.end.getTime() - window.start.getTime());
+    this._host.setAttribute(
+      attribute,
+      proportion < 0.25 ? 'right' : proportion > 0.75 ? 'left' : 'center',
     );
   }
 
@@ -481,16 +500,12 @@ export class TimelineController {
         this._timeline?.setCustomTime(targetTime, TIMELINE_TARGET_BAR_ID);
       }
 
-      const window = this._timeline.getWindow();
-      const markerProportion =
-        (targetTime.getTime() - window.start.getTime()) /
-        (window.end.getTime() - window.start.getTime());
-
       // Position the marker proportionally to how 'far' the pointer is being
       // held relative to the timeline window.
-      this._host.setAttribute(
+      this._setMarkerDirection(
+        targetTime,
+        this._timeline.getWindow(),
         'target-bar-marker-direction',
-        markerProportion < 0.25 ? 'right' : markerProportion > 0.75 ? 'left' : 'center',
       );
       this._timeline?.setCustomTimeMarker?.(
         formatDateAndTime(targetTime, true),
@@ -810,6 +825,7 @@ export class TimelineController {
     event: Event & { additionalEvent: string };
   }): Promise<void> => {
     this._removeTargetBar();
+    this._updatePlaybackBar();
     const view = this._viewManagerEpoch?.manager.getView();
 
     if (
