@@ -182,6 +182,33 @@ const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement
 };
 
 const timings = { cold: [] as number[], warm: [] as number[] };
+it('tolerates playback events before the lazy timeline method is available', async () => {
+  const card = await mount();
+  await choose(card, new Date('2026-10-02T12:35:00Z'));
+  const video = await waitForSelectedFrame(card);
+  video.pause();
+  const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+    card.card,
+    'advanced-camera-card-timeline-core',
+  ).find((element) => element.getBoundingClientRect().height > 0);
+  assert(core);
+  // Model the ref's element existing before its custom-element upgrade.
+  Object.defineProperty(core, 'handlePlaybackTimeUpdate', {
+    value: undefined,
+    configurable: true,
+  });
+  try {
+    video.dispatchEvent(new Event('timeupdate'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } finally {
+    Reflect.deleteProperty(core, 'handlePlaybackTimeUpdate');
+  }
+  video.currentTime = 40;
+  await expect
+    .poll(() => deepQuery<HTMLElement>(core, '.playback_bar')?.textContent)
+    .toBe(new Date('2026-10-02T12:34:40Z').toLocaleString('sv-SE'));
+});
+
 it('shows the native playback position, advances it, retains it paused, and follows native seeking', async () => {
   const card = await mount();
   await choose(card, new Date('2026-10-02T12:35:00Z'));

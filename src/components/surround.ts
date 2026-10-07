@@ -100,7 +100,7 @@ export class AdvancedCameraCardSurround extends LitElement {
       .locked=${this.locked}
       @advanced-camera-card:media:time-update=${(
         event: CustomEvent<MediaPlaybackTimeUpdate>,
-      ) => this._refTimeline.value?.handlePlaybackTimeUpdate(event.detail)}
+      ) => this._refTimeline.value?.handlePlaybackTimeUpdate?.(event.detail)}
       @advanced-camera-card:thumbnails-carousel:media-select=${(ev: CustomEvent) =>
         changeDrawer(ev, 'close')}
     >
