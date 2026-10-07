@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { add } from 'date-fns';
 import type { NonEmptyTuple } from 'type-fest';
 import type { DataSet } from 'vis-data';
@@ -36,6 +37,7 @@ import {
 } from '../../../src/components-lib/timeline/source';
 import type { ConditionStateManagerReadonlyInterface } from '../../../src/condition-trigger/conditions/types';
 import { QuerySource } from '../../../src/query-source';
+import { arrayify } from '../../../src/utils/basic';
 import { ViewMediaType } from '../../../src/view/item';
 import { UnifiedQuery, type QueryNode } from '../../../src/view/unified-query';
 import { createCameraManager, createStore } from '../../camera-manager/test-utils';
@@ -175,7 +177,485 @@ describe('TimelineDataSource', () => {
     vi.clearAllMocks();
   });
 
+  it('names an event-only timeout without claiming recording metadata failed', async () => {
+    const manager = createTestCameraManager();
+    const engine = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+    assert(engine);
+    vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+      maxWindowSeconds: 26 * 3600,
+      timelineWindowMaxSeconds: 24 * 3600,
+      segmentGapToleranceSeconds: 0,
+      selectDate: true,
+      exactTimeSelection: true,
+    });
+    vi.mocked(manager.executeMediaQueries).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    const source = createSource(
+      manager,
+      mock<FoldersManager>(),
+      mock<ConditionStateManagerReadonlyInterface>(),
+      cameraEventsQuery,
+      false,
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.useFakeTimers();
+    try {
+      const refresh = source.refresh({ start, end });
+      await vi.advanceTimersByTimeAsync(10000);
+      await refresh;
+      expect(source.getRecordingCoverageState()).toBeNull();
+      expect(
+        warn.mock.calls
+          .flat()
+          .some((value) => String(value).includes('Timeline metadata timeout')),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+  });
+
+  it.each(['failure', 'timeout', 'stale-failure'])(
+    'keeps verified quiet coverage independent of ancillary %s',
+    async (mode) => {
+      const manager = createTestCameraManager();
+      const engine = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+      assert(engine);
+      vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+        maxWindowSeconds: 26 * 3600,
+        timelineWindowMaxSeconds: 24 * 3600,
+        segmentGapToleranceSeconds: 0,
+        selectDate: true,
+        exactTimeSelection: true,
+      });
+      vi.mocked(manager.getRecordingSegments).mockImplementation(
+        async (queries) =>
+          new Map([
+            [
+              arrayify(queries)[0],
+              {
+                engine: Engine.Shinobi,
+                type: QueryResultsType.RecordingSegments,
+                segments: [
+                  {
+                    id: 'quiet',
+                    start_time: start.getTime() / 1000,
+                    end_time: end.getTime() / 1000,
+                  },
+                ],
+              },
+            ],
+          ]),
+      );
+      const source = createSource(
+        manager,
+        mock<FoldersManager>(),
+        mock<ConditionStateManagerReadonlyInterface>(),
+        cameraEventsQuery,
+        true,
+      );
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      let fail: ((error: Error) => void) | undefined;
+      const pending = new Promise<never>((_resolve, reject) => {
+        fail = reject;
+      });
+      vi.mocked(manager.executeMediaQueries)
+        .mockReturnValueOnce(pending)
+        .mockResolvedValue([]);
+      vi.useFakeTimers();
+      try {
+        await source.refresh({ start, end });
+        expect(source.getRecordingCoverageState()?.state).toBe('complete');
+        expect(
+          source.dataset.get({ filter: (item) => item.type === 'background' }),
+        ).toHaveLength(1);
+        if (mode === 'stale-failure') {
+          await source.refresh({ start, end });
+        }
+        if (mode === 'timeout') {
+          await vi.advanceTimersByTimeAsync(10000);
+        } else {
+          assert(fail);
+          fail(new Error('Ancillary unavailable'));
+          await vi.advanceTimersByTimeAsync(1);
+        }
+        expect(source.getRecordingCoverageState()?.state).toBe('complete');
+        expect(
+          source.dataset.get({ filter: (item) => item.type === 'background' }),
+        ).toHaveLength(1);
+        expect(warn).toHaveBeenCalledTimes(mode === 'stale-failure' ? 0 : 1);
+      } finally {
+        vi.useRealTimers();
+        warn.mockRestore();
+      }
+    },
+  );
+
+  it('shows exact quiet coverage, keeps gaps open and ignores a delayed old viewport', async () => {
+    const cameraManager = createTestCameraManager();
+    const engine = cameraManager.getStore().getCamera(CAMERA_ID)?.getEngine();
+    assert(engine);
+    vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+      maxWindowSeconds: 26 * 3600,
+      timelineWindowMaxSeconds: 24 * 3600,
+      segmentGapToleranceSeconds: 0,
+      selectDate: true,
+      exactTimeSelection: true,
+    });
+    vi.mocked(cameraManager.executeMediaQueries).mockResolvedValue([]);
+    const source = createSource(
+      cameraManager,
+      mock<FoldersManager>(),
+      mock<ConditionStateManagerReadonlyInterface>(),
+      cameraEventsQuery,
+      true,
+    );
+    const window = { start, end: add(start, { minutes: 4 }) };
+    const query: RecordingSegmentsQuery = {
+      type: QueryType.RecordingSegments,
+      cameraIDs: new Set([CAMERA_ID]),
+      ...window,
+    };
+    const result = (segments: RecordingSegment[]) =>
+      new Map([
+        [
+          query,
+          {
+            engine: Engine.Shinobi,
+            type: QueryResultsType.RecordingSegments as const,
+            segments,
+          },
+        ],
+      ]);
+    vi.mocked(cameraManager.getRecordingSegments).mockResolvedValue(
+      result([
+        {
+          id: 'quiet-a',
+          start_time: start.getTime() / 1000,
+          end_time: start.getTime() / 1000 + 60,
+        },
+        {
+          id: 'quiet-b',
+          start_time: start.getTime() / 1000 + 90,
+          end_time: start.getTime() / 1000 + 150,
+        },
+      ]),
+    );
+    expect(source.getRecordingCoverageState()).toBeNull();
+    await source.refresh(window);
+    expect(source.getRecordingCoverageState()).toEqual({ window, state: 'complete' });
+    expect(
+      source.dataset.get().map((item) => [item.type, item.start, item.end]),
+    ).toEqual([
+      ['background', start.getTime(), start.getTime() + 60000],
+      ['background', start.getTime() + 90000, start.getTime() + 150000],
+    ]);
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(cameraManager.getRecordingSegments).mockImplementationOnce(async () => {
+      await pending;
+      return result([
+        {
+          id: 'stale',
+          start_time: start.getTime() / 1000,
+          end_time: start.getTime() / 1000 + 60,
+        },
+      ]);
+    });
+    const stale = source.refresh(window);
+    expect(source.getRecordingCoverageState()?.state).toBe('loading');
+    const latest = { start: add(start, { days: 1 }), end: add(window.end, { days: 1 }) };
+    vi.mocked(cameraManager.getRecordingSegments).mockResolvedValue(
+      result([
+        {
+          id: 'latest',
+          start_time: latest.start.getTime() / 1000,
+          end_time: latest.end.getTime() / 1000,
+        },
+      ]),
+    );
+    await source.refresh(latest);
+    assert(release);
+    release();
+    await stale;
+    expect(source.getRecordingCoverageState()).toEqual({
+      window: latest,
+      state: 'complete',
+    });
+    expect(source.dataset.get().map((item) => item.id)).toEqual([
+      `recording-${CAMERA_ID}-latest`,
+    ]);
+  });
+
+  it.each([false, true])(
+    'ignores stale ancillary results and failures (failure=%s)',
+    async (failure) => {
+      const manager = createTestCameraManager();
+      const engine = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+      assert(engine);
+      vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+        maxWindowSeconds: 26 * 3600,
+        timelineWindowMaxSeconds: 24 * 3600,
+        segmentGapToleranceSeconds: 0,
+        selectDate: true,
+        exactTimeSelection: true,
+      });
+      const source = createSource(
+        manager,
+        mock<FoldersManager>(),
+        mock<ConditionStateManagerReadonlyInterface>(),
+        cameraEventsQuery,
+        false,
+      );
+      let release: (() => void) | undefined;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.mocked(manager.executeMediaQueries)
+        .mockImplementationOnce(async () => {
+          await pending;
+          if (failure) {
+            throw new Error('Old request failed');
+          }
+          return [testCameraMedia];
+        })
+        .mockResolvedValue([]);
+      const old = source.refresh({ start, end });
+      await source.refresh({
+        start: add(start, { days: 1 }),
+        end: add(end, { days: 1 }),
+      });
+      assert(release);
+      release();
+      await old;
+      expect(source.dataset.length).toBe(0);
+      expect(source.getRecordingCoverageState()).toBeNull();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.mocked(manager.executeMediaQueries).mockRejectedValueOnce(
+        new Error('Current request failed'),
+      );
+      await source.refresh({ start, end });
+      expect(source.getRecordingCoverageState()).toBeNull();
+      expect(warn).toHaveBeenCalledOnce();
+      warn.mockRestore();
+    },
+  );
+
+  it('keeps point markers inside the bounded viewport and prunes them outside', async () => {
+    const manager = createTestCameraManager();
+    const engine = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+    assert(engine);
+    vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+      maxWindowSeconds: 26 * 3600,
+      timelineWindowMaxSeconds: 24 * 3600,
+      segmentGapToleranceSeconds: 0,
+      selectDate: true,
+      exactTimeSelection: true,
+    });
+    vi.mocked(manager.executeMediaQueries).mockResolvedValue([]);
+    const source = createSource(
+      manager,
+      mock<FoldersManager>(),
+      mock<ConditionStateManagerReadonlyInterface>(),
+      cameraEventsQuery,
+      false,
+    );
+    const media = new TestViewMedia({
+      cameraID: CAMERA_ID,
+      id: 'point',
+      startTime: start,
+      endTime: null,
+    });
+    source.addMediaToDataset(cameraEventsQuery, [media]);
+    // vis point items have no end; prune them using their start instant.
+    source.dataset.add({
+      id: 'vis-point',
+      start: start.getTime(),
+      content: '',
+      type: 'point',
+    });
+    await source.refresh({ start, end });
+    expect(source.dataset.get('point')).not.toBeNull();
+    expect(source.dataset.get('vis-point')).not.toBeNull();
+    await source.refresh({ start: add(start, { days: 1 }), end: add(end, { days: 1 }) });
+    expect(source.dataset.get('point')).toBeNull();
+    expect(source.dataset.get('vis-point')).toBeNull();
+  });
+
+  it('bounds unknown coverage loading and rejects late results after timeout or failure', async () => {
+    const cameraManager = createTestCameraManager();
+    const engine = cameraManager.getStore().getCamera(CAMERA_ID)?.getEngine();
+    assert(engine);
+    vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+      maxWindowSeconds: 26 * 3600,
+      timelineWindowMaxSeconds: 24 * 3600,
+      segmentGapToleranceSeconds: 0,
+      selectDate: true,
+      exactTimeSelection: true,
+    });
+    vi.mocked(cameraManager.executeMediaQueries).mockResolvedValue([]);
+    const source = createSource(
+      cameraManager,
+      mock<FoldersManager>(),
+      mock<ConditionStateManagerReadonlyInterface>(),
+      cameraEventsQuery,
+      true,
+    );
+    const window = { start, end };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const initialQuery: RecordingSegmentsQuery = {
+      type: QueryType.RecordingSegments,
+      cameraIDs: new Set([CAMERA_ID]),
+      ...window,
+    };
+    vi.mocked(cameraManager.getRecordingSegments).mockResolvedValue(
+      new Map([
+        [
+          initialQuery,
+          {
+            engine: Engine.Shinobi,
+            type: QueryResultsType.RecordingSegments,
+            segments: [
+              {
+                id: 'verified',
+                start_time: start.getTime() / 1000,
+                end_time: end.getTime() / 1000,
+              },
+            ],
+          },
+        ],
+      ]),
+    );
+    await source.refresh(window);
+    expect(source.dataset.length).toBe(1);
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(cameraManager.getRecordingSegments).mockImplementationOnce(async () => {
+      await pending;
+      return new Map();
+    });
+    vi.useFakeTimers();
+    try {
+      const loading = source.refresh(window);
+      expect(source.getRecordingCoverageState()?.state).toBe('loading');
+      await vi.advanceTimersByTimeAsync(10000);
+      await loading;
+      expect(source.getRecordingCoverageState()?.state).toBe('error');
+      assert(release);
+      release();
+      await pending;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(source.getRecordingCoverageState()?.state).toBe('error');
+      expect(source.dataset.length).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+    vi.mocked(cameraManager.getRecordingSegments).mockRejectedValueOnce(
+      new Error('Unavailable'),
+    );
+    await source.refresh(window);
+    expect(source.getRecordingCoverageState()?.state).toBe('error');
+    vi.mocked(cameraManager.getRecordingSegments).mockResolvedValue(new Map());
+    await source.refresh(window);
+    expect(source.getRecordingCoverageState()?.state).toBe('error');
+    const query: RecordingSegmentsQuery = {
+      type: QueryType.RecordingSegments,
+      cameraIDs: new Set([CAMERA_ID]),
+      ...window,
+    };
+    vi.mocked(cameraManager.getRecordingSegments).mockResolvedValue(
+      new Map([
+        [
+          query,
+          {
+            type: QueryResultsType.RecordingSegments,
+            engine: Engine.Shinobi,
+            segments: [],
+          },
+        ],
+      ]),
+    );
+    await source.refresh(window);
+    expect(source.getRecordingCoverageState()?.state).toBe('complete');
+    warn.mockRestore();
+  });
+
   describe('should get groups', () => {
+    it('uses the strictest advertised limits in a mixed-engine timeline', () => {
+      const store = createStore([{ cameraID: CAMERA_ID }, { cameraID: 'camera-2' }]);
+      const manager = createCameraManager(store);
+      const first = manager.getStore().getCamera(CAMERA_ID)?.getEngine();
+      assert(first);
+      vi.spyOn(first, 'getRecordingQueryPolicy').mockReturnValue({
+        maxWindowSeconds: 1800,
+        timelineWindowMaxSeconds: 1200,
+        segmentGapToleranceSeconds: 0,
+        selectDate: true,
+        exactTimeSelection: true,
+      });
+      const second = store.getCamera('camera-2');
+      assert(second);
+      vi.spyOn(second.getEngine(), 'getRecordingQueryPolicy').mockReturnValue({
+        maxWindowSeconds: 3600,
+        timelineWindowMaxSeconds: 2400,
+        segmentGapToleranceSeconds: 10,
+        selectDate: false,
+        exactTimeSelection: false,
+      });
+      const query = new UnifiedQuery([
+        { ...eventQuery1, cameraIDs: new Set([CAMERA_ID, 'camera-2']) },
+      ]);
+      const source = createSource(
+        manager,
+        mock<FoldersManager>(),
+        mock<ConditionStateManagerReadonlyInterface>(),
+        query,
+        false,
+      );
+      expect(source.getMaximumQueryWindowSeconds()).toBe(1800);
+      expect(source.getMaximumTimelineWindowSeconds()).toBe(1200);
+      const window = { start: new Date(0), end: new Date(1200000) };
+      expect(source.getPrefetchWindow(window)).toEqual({
+        start: new Date(-300000),
+        end: new Date(1500000),
+      });
+    });
+    it('keeps Shinobi and mixed-camera prefetch within 26 hours without day rounding', async () => {
+      const cameraManager = createTestCameraManager();
+      const engine = cameraManager.getStore().getCamera(CAMERA_ID)?.getEngine();
+      assert(engine);
+      vi.spyOn(engine, 'getRecordingQueryPolicy').mockReturnValue({
+        maxWindowSeconds: 26 * 3600,
+        timelineWindowMaxSeconds: 24 * 3600,
+        segmentGapToleranceSeconds: 0,
+        selectDate: true,
+        exactTimeSelection: true,
+      });
+      const source = createSource(
+        cameraManager,
+        mock<FoldersManager>(),
+        mock<ConditionStateManagerReadonlyInterface>(),
+        cameraEventsQuery,
+        false,
+      );
+      const window = {
+        start: new Date('2026-10-24T23:30:00Z'),
+        end: new Date('2026-10-25T23:30:00Z'),
+      };
+      expect(source.getCacheFriendlyWindow(window)).toEqual(window);
+      const prefetch = source.getPrefetchWindow(window);
+      expect(prefetch.start.toISOString()).toBe('2026-10-24T22:30:00.000Z');
+      expect(prefetch.end.toISOString()).toBe('2026-10-26T00:30:00.000Z');
+      await source.refresh(prefetch);
+      const query = vi.mocked(cameraManager.executeMediaQueries).mock.calls[0][0][0];
+      expect(query.start).toEqual(prefetch.start);
+      expect(query.end).toEqual(prefetch.end);
+    });
     it('should get camera based groups', () => {
       const source = createSource(
         createTestCameraManager(),

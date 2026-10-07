@@ -47,3 +47,36 @@ advanced-camera-card-icon {
   width: 100%;
   position: absolute;
 }
+
+:host([time-zone]) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  width: auto;
+  height: auto;
+
+  input {
+    position: static;
+    visibility: visible;
+    opacity: 1;
+    width: auto;
+    min-height: 32px;
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+  }
+
+  advanced-camera-card-icon {
+    display: none;
+  }
+
+  select {
+    min-height: 32px;
+    max-width: 100%;
+  }
+
+  [role='alert'] {
+    flex-basis: 100%;
+    color: var(--error-color);
+  }
+}

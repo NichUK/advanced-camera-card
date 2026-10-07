@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 
 import { svgPath } from './scripts/vite/plugins/svg-path.js';
 import { getBrowsers, type Browser } from './scripts/vitest/browsers.js';
+import { shinobiHTTPMedia } from './tests/browser/shinobi-http-media-plugin.js';
 
 // Browser tests mount the real card in a browser. Their own config rather than
 // a fourth project in `vitest.config.ts`, because `vitest run` executes every
@@ -12,7 +13,8 @@ export default defineConfig({
   // supply the same asset shape the build's plugin does: an SVG becomes the
   // `{ path, viewBox }` a custom iconset serves. `svgPath` is the build's own
   // plugin, reused unchanged.
-  plugins: [svgPath()],
+  plugins: [svgPath(), shinobiHTTPMedia()],
+  cacheDir: '.vitest/browser-cache',
 
   // Where the Mock Service Worker script is served from, which Vite serves at
   // the root of the page. Named rather than left at its default of `public/` in

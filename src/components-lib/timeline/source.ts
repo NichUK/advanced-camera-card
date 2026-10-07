@@ -8,6 +8,7 @@ import {
   ExpiringMemoryRangeSet,
   MemoryRangeSet,
 } from '../../camera-manager/range';
+import { getRecordingQueryPolicy } from '../../camera-manager/recording-policy';
 import type { RecordingSegment } from '../../camera-manager/types';
 import { capEndDate } from '../../camera-manager/utils/cap-end-date';
 import { convertRangeToCacheFriendlyTimes } from '../../camera-manager/utils/range-to-cache-friendly';
@@ -15,6 +16,7 @@ import type { FoldersManager } from '../../card-controller/folders/manager';
 import type { ConditionStateManagerReadonlyInterface } from '../../condition-trigger/conditions/types';
 import type { FolderConfig } from '../../config/schema/folders';
 import { errorToConsole } from '../../utils/basic.js';
+import { withTimeout } from '../../utils/concurrency/with-timeout';
 import type {
   EventViewMedia,
   ReviewViewMedia,
@@ -74,7 +76,19 @@ export const canMediaBeShownAsTimelineItem = (
 ): media is EventViewMedia | ReviewViewMedia =>
   ViewItemClassifier.isEvent(media) || ViewItemClassifier.isReview(media);
 
+export interface RecordingCoverageState {
+  window: TimelineWindow;
+  state: 'loading' | 'complete' | 'error';
+}
+
 export class TimelineDataSource {
+  private _refreshEpoch = 0;
+  private _coverage: RecordingCoverageState | null = null;
+
+  public getRecordingCoverageState(): RecordingCoverageState | null {
+    return this._coverage;
+  }
+
   private _cameraManager: CameraManager;
 
   private _builder: UnifiedQueryBuilder;
@@ -221,6 +235,49 @@ export class TimelineDataSource {
     this._dataset.update(data);
   }
 
+  public requiresBoundedWindows(): boolean {
+    return this.getMaximumQueryWindowSeconds() !== null;
+  }
+
+  public getMaximumQueryWindowSeconds(): number | null {
+    const limits = Array.from(this._shape.getAllCameraIDs()).flatMap((id) => {
+      const policy = getRecordingQueryPolicy(
+        this._cameraManager.getStore().getCamera(id),
+      );
+      return policy ? [policy.maxWindowSeconds] : [];
+    });
+    return limits.length ? Math.min(...limits) : null;
+  }
+
+  public getMaximumTimelineWindowSeconds(): number | null {
+    const limits = Array.from(this._shape.getAllCameraIDs()).flatMap((id) => {
+      const policy = getRecordingQueryPolicy(
+        this._cameraManager.getStore().getCamera(id),
+      );
+      return policy ? [policy.timelineWindowMaxSeconds] : [];
+    });
+    return limits.length ? Math.min(...limits) : null;
+  }
+
+  public getCacheFriendlyWindow(window: TimelineWindow): TimelineWindow {
+    return this.requiresBoundedWindows()
+      ? window
+      : convertRangeToCacheFriendlyTimes(window);
+  }
+
+  public getPrefetchWindow(window: TimelineWindow): TimelineWindow {
+    const maximumSeconds = this.getMaximumQueryWindowSeconds();
+    const width = window.end.getTime() - window.start.getTime();
+    const padding =
+      maximumSeconds !== null
+        ? Math.max(0, Math.min(width, (maximumSeconds * 1000 - width) / 2))
+        : width;
+    return {
+      start: new Date(window.start.getTime() - padding),
+      end: new Date(window.end.getTime() + padding),
+    };
+  }
+
   public buildRecordingsWindowedQuery(window: TimelineWindow): UnifiedQuery | null {
     return this._builder.buildRecordingsQuery(this._shape.getAllCameraIDs(), {
       start: window.start,
@@ -228,8 +285,8 @@ export class TimelineDataSource {
     });
   }
 
-  private async _refreshQuery(window: TimelineWindow): Promise<void> {
-    const cacheFriendlyWindow = convertRangeToCacheFriendlyTimes(window);
+  private async _refreshQuery(window: TimelineWindow, epoch: number): Promise<void> {
+    const cacheFriendlyWindow = this.getCacheFriendlyWindow(window);
 
     if (
       this._cache.hasCoverage({
@@ -247,7 +304,14 @@ export class TimelineDataSource {
       end: cacheFriendlyWindow.end,
     });
 
-    this.addMediaToDataset(query, await this._runner.execute(query));
+    const media = await this._runner.execute(query);
+    if (epoch !== this._refreshEpoch) {
+      return;
+    }
+    this.addMediaToDataset(query, media);
+    if (this.requiresBoundedWindows()) {
+      this._pruneDataset(window);
+    }
     this._cache.add({
       ...cacheFriendlyWindow,
       expires: add(new Date(), { seconds: TIMELINE_FRESHNESS_TOLERANCE_SECONDS }),
@@ -255,17 +319,76 @@ export class TimelineDataSource {
   }
 
   public async refresh(window: TimelineWindow): Promise<void> {
+    const epoch = ++this._refreshEpoch;
+    const bounded = this.requiresBoundedWindows();
+    if (bounded) {
+      this._coverage = this._showRecordings ? { window, state: 'loading' } : null;
+      this._cache.clear();
+      this._recordingRanges.clear();
+    }
     try {
-      await Promise.all([
-        this._refreshQuery(window),
-        ...(this._showRecordings ? [this._refreshRecordings(window)] : []),
-      ]);
+      const queryWork = this._refreshQuery(window, epoch);
+      if (bounded && this._showRecordings) {
+        // Ancillary events/thumbnails cannot invalidate verified recording
+        // coverage or hold its loading state behind an unrelated stalled query.
+        void withTimeout(
+          queryWork,
+          10000,
+          new Error('Timeline ancillary timeout'),
+        ).catch(() => {
+          if (epoch === this._refreshEpoch) {
+            errorToConsole(new Error('Timeline ancillary metadata unavailable'));
+          }
+        });
+        await withTimeout(
+          this._refreshRecordings(window, epoch),
+          10000,
+          new Error('Recording metadata timeout'),
+        );
+      } else {
+        const work = Promise.all([
+          queryWork,
+          ...(this._showRecordings ? [this._refreshRecordings(window, epoch)] : []),
+        ]);
+        if (bounded) {
+          await withTimeout(work, 10000, new Error('Timeline metadata timeout'));
+        } else {
+          await work;
+        }
+      }
+      if (bounded && epoch === this._refreshEpoch) {
+        this._pruneDataset(window);
+        this._coverage = this._showRecordings ? { window, state: 'complete' } : null;
+      }
     } catch (e) {
-      errorToConsole(e);
+      if (epoch === this._refreshEpoch) {
+        // A failed/expired refresh must also invalidate its remaining work.
+        this._refreshEpoch++;
+        if (bounded) {
+          this._coverage = this._showRecordings ? { window, state: 'error' } : null;
+          this._dataset.remove(
+            this._dataset.get({ filter: (item) => item.type === 'background' }),
+          );
+        }
+        errorToConsole(e);
+      }
     }
   }
 
-  private async _refreshRecordings(window: TimelineWindow): Promise<void> {
+  private _pruneDataset(window: TimelineWindow): void {
+    this._dataset.remove(
+      this._dataset.get({
+        filter: (item) =>
+          item.start >= window.end.getTime() ||
+          (item.end ?? item.start) < window.start.getTime(),
+      }),
+    );
+  }
+
+  private async _refreshRecordings(
+    window: TimelineWindow,
+    epoch: number,
+  ): Promise<void> {
     // Recordings only apply to camera-based shapes
     const cameraIDs = this._shape.getAllCameraIDs();
     if (!cameraIDs?.size) {
@@ -328,7 +451,7 @@ export class TimelineDataSource {
       return;
     }
 
-    const cacheFriendlyWindow = convertRangeToCacheFriendlyTimes(window);
+    const cacheFriendlyWindow = this.getCacheFriendlyWindow(window);
     const recordingQueries = this._cameraManager.generateDefaultRecordingSegmentsQueries(
       cameraIDs,
       {
@@ -337,10 +460,19 @@ export class TimelineDataSource {
       },
     );
 
-    if (!recordingQueries) {
+    if (!recordingQueries?.length) {
+      if (this.requiresBoundedWindows()) {
+        throw new Error('Recording coverage unavailable');
+      }
       return;
     }
     const results = await this._cameraManager.getRecordingSegments(recordingQueries);
+    if (epoch !== this._refreshEpoch) {
+      return;
+    }
+    if (!results.size && this.requiresBoundedWindows()) {
+      throw new Error('Recording coverage unavailable');
+    }
 
     const newSegments: Map<string, RecordingSegment[]> = new Map();
     for (const [query, result] of results) {
@@ -355,13 +487,19 @@ export class TimelineDataSource {
     }
 
     for (const [cameraID, segments] of newSegments.entries()) {
-      const existingRecordings = getExistingRecordingsForCameraID(cameraID);
+      const policy = getRecordingQueryPolicy(
+        this._cameraManager.getStore().getCamera(cameraID),
+      );
+      const existingRecordings = policy
+        ? []
+        : getExistingRecordingsForCameraID(cameraID);
       const mergedRecordings = existingRecordings.concat(
         segments.map((segment) => convertSegmentToRecording(cameraID, segment)),
       );
       const compressedRecordings = compressRanges(
         mergedRecordings,
-        TIMELINE_RECORDING_SEGMENT_CONSECUTIVE_TOLERANCE_SECONDS,
+        policy?.segmentGapToleranceSeconds ??
+          TIMELINE_RECORDING_SEGMENT_CONSECUTIVE_TOLERANCE_SECONDS,
       ) as AdvancedCameraCardTimelineItemWithEnd[];
 
       deleteRecordingsForCameraID(cameraID);

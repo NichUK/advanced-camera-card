@@ -14,6 +14,17 @@ You can interact with the timeline in a number of ways:
 - Clicking on the "background", or a camera title, will take you to the recordings for that camera (seeking to the clicked time).
 - Clicking on the time axis will take you to recordings for all cameras (seeking to the clicked time).
 
+Native recordings report a red playback indicator and timestamp on the
+mini-timeline. It follows playback and native seeking, stays at the current time
+when paused, and clears when the selection changes. It does not automatically
+move the timeline window. The navigation target remains separate.
+
+Engines providing exact recording coverage also show coverage status, explicit
+Earlier/Later and zoom controls, and a date input in the recording timezone.
+Unshaded gaps remain empty; selecting a date can select the recording at that
+instant. These behaviours are optional engine policies. Existing engines retain
+their current selection and gap-compression defaults.
+
 | Option                 | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `clustering_threshold` | `3`     | The minimum number of overlapping events to allow prior to clustering/grouping them. Higher numbers cause clustering to happen less frequently. Depending on the timescale/zoom of the timeline, the underlying timeline library may still allow overlaps for low values of this parameter -- for a fully "flat" timeline use the `ribbon` style. `0` disables clustering entirely. Only used in the `stack` style of timeline. |

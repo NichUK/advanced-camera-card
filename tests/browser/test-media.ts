@@ -1,6 +1,6 @@
 import { delay, http, HttpResponse } from 'msw';
 import { setupWorker } from 'msw/browser';
-import { beforeAll } from 'vitest';
+import { afterAll, beforeAll } from 'vitest';
 
 import { createFixtureURL, SNAPSHOT_FIXTURE_FILENAME } from './fixtures';
 
@@ -145,7 +145,7 @@ export const waitForTestMediaRequestCount = async (
  * it would not.
  */
 const worker = setupWorker(
-  http.get(`${TEST_MEDIA_PATH}/:file`, async ({ request, params }) => {
+  http.all(`${TEST_MEDIA_PATH}/:file`, async ({ request, params }) => {
     const url = new URL(request.url);
     const token = url.searchParams.get('token');
     if (!token) {
@@ -185,11 +185,14 @@ const worker = setupWorker(
     const fixture = await fetch(createFixtureURL(String(params.file)));
 
     return fixture.ok
-      ? new HttpResponse(await fixture.arrayBuffer(), {
-          headers: {
-            'Content-Type': fixture.headers.get('Content-Type') ?? 'image/png',
+      ? new HttpResponse(
+          request.method === 'HEAD' ? null : await fixture.arrayBuffer(),
+          {
+            headers: {
+              'Content-Type': fixture.headers.get('Content-Type') ?? 'image/png',
+            },
           },
-        })
+        )
       : new HttpResponse(null, { status: fixture.status });
   }),
 );
@@ -207,5 +210,13 @@ export const useTestMedia = (): void => {
     // above -- is left alone.
     await worker.start({ onUnhandledRequest: 'bypass', quiet: true });
     inUse = true;
+  });
+  afterAll(() => {
+    // The worker registration is shared by same-origin test frames. Retired
+    // frames must relinquish interception before the next file activates it.
+    worker.stop();
+    inUse = false;
+    requestCounts.clear();
+    requestWaiters.clear();
   });
 };
