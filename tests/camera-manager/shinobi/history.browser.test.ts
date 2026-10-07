@@ -193,7 +193,9 @@ it.each(['390px', '1664px'])(
             card.card,
             'advanced-camera-card-timeline-core',
           ).find((element) => element.getBoundingClientRect().height > 0);
-          if (!core) return false;
+            if (!core) {
+              return false;
+            }
           const labels = deepQueryAll<HTMLElement>(core, '.vis-text:not(.vis-measure)');
           const bounds = core.getBoundingClientRect();
           const cardBounds = card.card.getBoundingClientRect();
