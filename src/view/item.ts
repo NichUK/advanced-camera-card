@@ -3,6 +3,7 @@ import { clone } from 'lodash-es';
 import type { FolderPathComponent } from '../card-controller/folders/types';
 import type { FolderConfig } from '../config/schema/folders';
 import type { Severity } from '../severity';
+import type { RecordingPlaybackOptions } from './recording-playback';
 
 export enum ViewMediaType {
   Clip = 'clip',
@@ -81,6 +82,14 @@ export class ViewMedia {
     const startTime = this.getStartTime();
     const endTime = this.getUsableEndTime();
     return !!startTime && !!endTime && seek >= startTime && seek <= endTime;
+  }
+
+  public getRecordingPlaybackOptions(): RecordingPlaybackOptions | null {
+    return null;
+  }
+
+  public requiresExactTimeSelection(): boolean {
+    return false;
   }
 
   // Sets the favorite attribute (if any). This purely sets the media item as a

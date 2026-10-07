@@ -27,6 +27,7 @@ import type { CardWideConfig } from '../config/schema/types';
 import type { HomeAssistant } from '../ha/types';
 import { localize } from '../localize/localize';
 import timelineCoreStyle from '../scss/timeline-core.scss?inline';
+import type { MediaPlaybackTimeUpdate } from '../types';
 import { contentsChanged } from '../utils/basic';
 
 import './date-picker.js';
@@ -150,6 +151,10 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
   private _refTimeline: Ref<HTMLElement> = createRef();
   private _controller: TimelineController = new TimelineController(this);
 
+  public handlePlaybackTimeUpdate(update: MediaPlaybackTimeUpdate): void {
+    this._controller.handlePlaybackTimeUpdate(update);
+  }
+
   protected render(): TemplateResult | void {
     if (!this.hass || !this.timelineConfig) {
       return;
@@ -158,7 +163,7 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
     const view = this.viewManagerEpoch?.manager.getView();
     const isLoading = !!view?.context?.loading?.query;
 
-    if (isLoading) {
+    if (isLoading && !this._controller.shouldKeepDatePickerVisible(view)) {
       if (!this.mini) {
         return renderNotificationBlockFromText(localize('error.awaiting_media'), {
           icon: 'mdi:chart-gantt',
@@ -197,13 +202,32 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
             ? 'mdi:play-box-lock'
             : 'mdi:camera-lock';
 
-    return html` <div
-      @advanced-camera-card:timeline:thumbnail-data-request=${this._controller
-        .handleThumbnailDataRequest}
-      class="timeline"
-      ${ref(this._refTimeline)}
-    >
-      <div class="timeline-tools">
+    return html`
+      <div
+        class=${this._controller.getDatePickerTimeZone() !== null
+          ? 'timeline-tools zoned'
+          : 'timeline-tools'}
+      >
+        ${this._controller.getRecordingCoverageState()
+          ? html`<span role="status" aria-live="polite"
+              >${localize(
+                `timeline.recording_coverage_${this._controller.getRecordingCoverageState()}`,
+              )}</span
+            >`
+          : ''}
+        ${this._controller.getDatePickerTimeZone()
+          ? (['previous', 'next', 'in', 'out'] as const).map(
+              (action) =>
+                html`<button
+                  type="button"
+                  aria-label=${localize(`timeline.viewport_${action}`)}
+                  title=${localize(`timeline.viewport_${action}`)}
+                  @click=${() => this._controller.adjustTimelineWindow(action)}
+                >
+                  ${localize(`timeline.viewport_${action}`)}
+                </button>`,
+            )
+          : ''}
         ${this._controller.shouldSupportSeeking()
           ? html` <advanced-camera-card-icon
               .icon=${{ icon: panIcon }}
@@ -214,6 +238,7 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
             </advanced-camera-card-icon>`
           : ''}
         <advanced-camera-card-date-picker
+          .timeZone=${this._controller.getDatePickerTimeZone() ?? undefined}
           ${ref(this._refDatePicker)}
           @advanced-camera-card:date-picker:change=${(
             ev: CustomEvent<DatePickerEvent>,
@@ -225,7 +250,13 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
         >
         </advanced-camera-card-date-picker>
       </div>
-    </div>`;
+      <div
+        @advanced-camera-card:timeline:thumbnail-data-request=${this._controller
+          .handleThumbnailDataRequest}
+        class="timeline"
+        ${ref(this._refTimeline)}
+      ></div>
+    `;
   }
 
   /**
@@ -274,7 +305,12 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
 
   protected updated(changedProperties: PropertyValues): void {
     super.updated(changedProperties);
-    if (this._controller.setTimelineElement(this._refTimeline.value)) {
+    if (
+      this._controller.setTimelineElement(this._refTimeline.value) &&
+      !this._controller.shouldKeepDatePickerVisible(
+        this.viewManagerEpoch?.manager.getView(),
+      )
+    ) {
       // If the timeline was just created, give it one frame to draw itself.
       // Failure to do so may result in subsequent calls to
       // `this._timeline.setwindow()` being entirely ignored. Example case:

@@ -2,6 +2,28 @@
 
 ## Overview
 
+The experimental `shinobi` engine consumes the `shinobi_recordings` Home
+Assistant integration's archive camera. Choose `engine: shinobi`, or let the card
+detect that integration automatically. Credentials and the Shinobi server URL
+belong in the integration; they are never configured in the card. The unrelated
+legacy `shinobi` integration is not automatically detected.
+
+```yaml
+cameras:
+  - camera_entity: camera.garden_recordings
+    engine: shinobi
+```
+
+Completed recordings play at their original quality. Selecting a time chooses
+the file covering that instant; gaps remain empty. Adjacent files continue
+automatically, while a gap requires explicit continuation. The archive supports
+recording coverage, seeking and optionally downloading when the integration
+authorizes it. It does not advertise live view, PTZ, snapshots, events or
+favorites. Browser support for the original codec is required.
+
+This engine remains experimental pending real-device acceptance and review.
+The stable capability matrix below does not include it.
+
 A "Camera Engine" defines what "type" of camera is being configured (e.g. `frigate`), each engine offers different capabilities:
 
 | Engine      | Live               | Supports clips           | Supports Snapshots       | Supports Recordings      | Supports Timeline        | Supports PTZ out of the box | Supports manually configured PTZ | Favorite events          | Favorite recordings      | Detect new events        | Detect new snapshots     | Detect new clips         | May require [proxying](./README.md?id=proxy) | Thumbnails               |

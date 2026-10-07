@@ -22,6 +22,11 @@ export interface MediaLoadedCapabilities {
   hasAudio?: boolean;
 }
 
+export interface MediaPlaybackTimeUpdate {
+  mediaID: string | null;
+  seconds: number;
+}
+
 export type MediaTechnology =
   | 'hls'
   | 'jpg'

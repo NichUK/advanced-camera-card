@@ -6,6 +6,7 @@ import { FrigateCameraManagerEngine } from '../../src/camera-manager/frigate/eng
 import { GenericCameraManagerEngine } from '../../src/camera-manager/generic/engine-generic';
 import { MotionEyeCameraManagerEngine } from '../../src/camera-manager/motioneye/engine-motioneye';
 import { ReolinkCameraManagerEngine } from '../../src/camera-manager/reolink/engine-reolink.js';
+import { ShinobiCameraManagerEngine } from '../../src/camera-manager/shinobi/engine-shinobi';
 import { TPLinkCameraManagerEngine } from '../../src/camera-manager/tplink/engine-tplink.js';
 import { Engine } from '../../src/camera-manager/types.js';
 import type { CardWideConfig } from '../../src/config/schema/types.js';
@@ -35,6 +36,27 @@ const createFactory = (options?: {
 };
 
 describe('getEngineForCamera()', () => {
+  it('selects Shinobi explicitly and detects only the original adapter platform', async () => {
+    expect(
+      await createFactory().getEngineForCamera(
+        createHASS(),
+        createCameraConfig({ engine: 'shinobi' }),
+      ),
+    ).toBe(Engine.Shinobi);
+    for (const platform of ['shinobi_recordings', 'shinobi']) {
+      const factory = createFactory({
+        entityRegistryManager: new EntityRegistryManagerMock([
+          createRegistryEntity({ entity_id: 'camera.archive', platform }),
+        ]),
+      });
+      expect(
+        await factory.getEngineForCamera(
+          createHASS(),
+          createCameraConfig({ camera_entity: 'camera.archive' }),
+        ),
+      ).toBe(platform === 'shinobi_recordings' ? Engine.Shinobi : Engine.Generic);
+    }
+  });
   describe('should get a frigate camera', () => {
     it('from manually set engine', async () => {
       const config = createCameraConfig({ engine: 'frigate' });
@@ -260,6 +282,14 @@ describe('createEngine()', () => {
         resolvedMediaCache: mock<ResolvedMediaCache>(),
       }),
     ).toBeInstanceOf(ReolinkCameraManagerEngine);
+  });
+  it('creates a Shinobi engine without contacting Shinobi', async () => {
+    expect(
+      await createFactory().createEngine(Engine.Shinobi, {
+        hassManager: createHASSManager(),
+        resolvedMediaCache: mock<ResolvedMediaCache>(),
+      }),
+    ).toBeInstanceOf(ShinobiCameraManagerEngine);
   });
   it('should create tplink engine', async () => {
     expect(

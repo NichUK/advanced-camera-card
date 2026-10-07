@@ -249,6 +249,7 @@ export const getCameraSchema = (options: CameraSchemaOptions): HAFormSchema[] =>
             { value: 'generic', label: localize('config.cameras.engines.generic') },
             { value: 'motioneye', label: localize('config.cameras.engines.motioneye') },
             { value: 'reolink', label: localize('config.cameras.engines.reolink') },
+            { value: 'shinobi', label: localize('config.cameras.engines.shinobi') },
             { value: 'tplink', label: localize('config.cameras.engines.tplink') },
           ]),
         },

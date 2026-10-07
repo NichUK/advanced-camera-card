@@ -25,6 +25,12 @@ describe('GenericCameraManagerEngine', () => {
     expect(createEngine().getEngineType()).toBe(Engine.Generic);
   });
 
+  it('preserves existing recording behaviour without an opt-in policy', async () => {
+    const engine = createEngine();
+    const camera = await engine.createCamera(createCameraConfig());
+    expect(engine.getRecordingQueryPolicy(camera)).toBeNull();
+  });
+
   it('should initialize camera', async () => {
     const config = createGenericCameraConfig();
     const camera = await createEngine().createCamera(config);

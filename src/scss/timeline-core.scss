@@ -197,6 +197,31 @@ div.vis-tooltip {
   // Prevent the mouse interacting with the custom time.
   pointer-events: none;
 }
+
+.playback_bar {
+  background-color: var(--error-color, #db4437);
+  width: 3px;
+  z-index: 25;
+  // This is an observation, not a draggable seek control.
+  pointer-events: none;
+}
+
+.playback_bar .vis-custom-time-marker {
+  background-color: #a32620;
+  color: #fff;
+  font-size: 12px;
+}
+
+:host([playback-bar-marker-direction='right']) .playback_bar .vis-custom-time-marker {
+  left: 3px;
+}
+:host([playback-bar-marker-direction='left']) .playback_bar .vis-custom-time-marker {
+  right: 3px;
+}
+:host([playback-bar-marker-direction='center']) .playback_bar .vis-custom-time-marker {
+  left: 0px;
+  transform: translateX(-50%);
+}
 .target_bar .vis-custom-time-marker {
   background-color: var(--advanced-camera-card-timeline-background);
   color: var(--advanced-camera-card-timeline-text-color);
@@ -239,4 +264,20 @@ div.vis-tooltip {
 }
 .timeline-tools * {
   cursor: pointer;
+}
+
+.timeline-tools.zoned {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  background-color: var(--advanced-camera-card-timeline-background);
+}
+
+.timeline-tools.zoned button {
+  min-width: 32px;
+  min-height: 32px;
+  color: var(--primary-text-color);
+  background: var(--card-background-color);
+  border: 1px solid var(--divider-color);
+  border-radius: 4px;
 }

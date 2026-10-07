@@ -6,6 +6,19 @@ import { createFolder } from '../test-utils';
 import { generateViewMediaArray, TestViewMedia } from './test-utils';
 
 describe('dispatchViewContextChangeEvent', () => {
+  it('preserves an explicitly empty selection when cloning populated results', () => {
+    const results = new QueryResults({ results: generateViewMediaArray() });
+    results.resetSelectedResult();
+    for (const cameraID of results.getCameraIDs()) {
+      results.resetSelectedResult(cameraID);
+    }
+    const clone = results.clone();
+    expect(clone.getSelectedResult()).toBeNull();
+    expect(clone.getResults()).toHaveLength(200);
+    for (const cameraID of clone.getCameraIDs()) {
+      expect(clone.getSelectedResult(cameraID)).toBeNull();
+    }
+  });
   beforeEach(() => {
     vi.useRealTimers();
   });

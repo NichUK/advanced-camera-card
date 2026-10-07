@@ -34,6 +34,38 @@ This writes to `dist/` just like a normal build so that Home Assistant reading
 the card from a path on disk picks each rebuild up. To have Home Assistant read
 from a URL instead, use `yarn preview` which serves `dist/` on port 10001.
 
+## Recording engine boundaries
+
+Built-in engines are registered through the engine factory, engine enum and
+camera configuration/editor choices. Backend-specific identity, discovery,
+metadata validation, URL resolution and capabilities belong in the engine
+directory. Shared viewers and timelines must not import backend classes or
+branch on an engine name.
+
+The experimental Shinobi engine extends `BrowseMediaCameraManagerEngine`, uses
+an `EntityCamera`, and supplies `RecordingViewMedia` through the existing query,
+segment, seek and download contracts. Its HA integration owns authentication,
+authorization and streaming; the card never receives Shinobi credentials.
+
+Two optional contracts preserve the original-file experience:
+
+- `RecordingQueryPolicy` supplies query and viewport bounds, gap compression,
+  exact selection, date selection and the recording timezone. The common engine
+  returns `null`, preserving existing behaviour. A mixed timeline uses the
+  strictest advertised bounds and each camera's own segment-gap tolerance.
+- `RecordingPlaybackOptions` supplies a resolver and media preflight callback,
+  load/stall deadlines and adjacent-file continuation. Ordinary `ViewMedia`
+  returns `null` and uses the existing cached resolver and player. Exact selection
+  is a separate media property; it never selects transport or watchdog behaviour.
+
+Shared code owns user-visible failures/retry, cancellation, native player
+lifecycle, gap continuation, date input and playback indication. Transport
+failures cross that boundary as a redacted `RecordingPlaybackError`.
+Source boundary tests reject Shinobi references outside its engine and the
+registration allowlist. Regression suites exercise legacy defaults, optional
+policies, mixed cameras and browser recording journeys. Private preview
+namespacing and deployment tooling are outside the standard build.
+
 ## Releasing
 
 ### Release Philosophy

@@ -46,6 +46,26 @@ const createAPIDisplaying = (...cameraIDs: string[]): CardController => {
 
 // @vitest-environment jsdom
 describe('MediaUnavailableIssue', () => {
+  it('keeps deleted media actionable without automatically retrying it forever', () => {
+    const api = createAPIDisplaying('camera-1');
+    const issue = new MediaUnavailableIssue(api);
+    issue.trigger({
+      targetID: 'camera-1',
+      reason: 'server_error',
+      automaticRetry: false,
+    });
+    expect(issue.hasIssue()).toBe(true);
+    expect(issue.needsRetry()).toBe(false);
+    expect(issue.canRetryNow()).toBe(false);
+    issue.retry();
+    expect(api.getViewManager().setViewWithMergedContext).not.toHaveBeenCalled();
+    issue.retry(true);
+    expect(api.getViewManager().setViewWithMergedContext).toHaveBeenCalledWith({
+      mediaEpoch: { 'camera-1': 1 },
+    });
+    issue.resolve({ targetID: 'camera-1', cause: 'media-loaded' });
+    expect(issue.hasIssue()).toBe(false);
+  });
   it('should have correct key', () => {
     expect(new MediaUnavailableIssue(createCardAPI()).key).toBe('media_unavailable');
   });
@@ -492,6 +512,24 @@ describe('MediaUnavailableIssue', () => {
   });
 
   describe('rebuilding a load that has not arrived', () => {
+    it('lets a replacement load while retaining the server error, then retries a new failure', () => {
+      const api = createAPIDisplaying('camera-1');
+      const issue = new MediaUnavailableIssue(api);
+      issue.trigger({ targetID: 'camera-1', reason: 'server_error' });
+      issue.retry();
+      expect(issue.hasIssue()).toBe(true);
+      expect(issue.canRetryNow()).toBe(false);
+      vi.advanceTimersByTime(100);
+      issue.retry();
+      expect(api.getViewManager().setViewWithMergedContext).toHaveBeenCalledTimes(1);
+      issue.trigger({ targetID: 'camera-1', reason: 'server_error' });
+      expect(issue.canRetryNow()).toBe(true);
+      issue.retry();
+      expect(api.getViewManager().setViewWithMergedContext).toHaveBeenCalledTimes(2);
+      issue.resolve({ targetID: 'camera-1', cause: 'media-loaded' });
+      expect(issue.hasIssue()).toBe(false);
+    });
+
     beforeEach(() => {
       vi.useFakeTimers();
     });

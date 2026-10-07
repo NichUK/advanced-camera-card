@@ -80,6 +80,17 @@ export class CameraManagerEngineFactory {
           options.eventCallback,
         );
         break;
+      case Engine.Shinobi:
+        const { ShinobiCameraManagerEngine } = await import('./shinobi/engine-shinobi');
+        cameraManagerEngine = new ShinobiCameraManagerEngine(
+          this._entityRegistryManager,
+          options.hassManager,
+          new BrowseMediaWalker(),
+          options.resolvedMediaCache,
+          new CameraManagerRequestCache(),
+          options.eventCallback,
+        );
+        break;
       case Engine.TPLink:
         const { TPLinkCameraManagerEngine } = await import('./tplink/engine-tplink');
         cameraManagerEngine = new TPLinkCameraManagerEngine(
@@ -105,6 +116,8 @@ export class CameraManagerEngineFactory {
       engine = Engine.Generic;
     } else if (cameraConfig.engine === 'reolink') {
       engine = Engine.Reolink;
+    } else if (cameraConfig.engine === 'shinobi') {
+      engine = Engine.Shinobi;
     } else if (cameraConfig.engine === 'tplink') {
       engine = Engine.TPLink;
     } else {
@@ -131,6 +144,9 @@ export class CameraManagerEngineFactory {
             break;
           case 'reolink':
             engine = Engine.Reolink;
+            break;
+          case 'shinobi_recordings':
+            engine = Engine.Shinobi;
             break;
           case 'tplink':
             engine = Engine.TPLink;

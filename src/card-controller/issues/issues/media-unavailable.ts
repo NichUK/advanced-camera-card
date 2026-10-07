@@ -32,6 +32,7 @@ declare module 'issue' {
       // Free text naming the specific failure (e.g. the message a player
       // reported), when the trigger source knew it.
       description?: string;
+      automaticRetry?: boolean;
     };
   }
 
@@ -59,11 +60,13 @@ declare module 'issue' {
 interface TargetError {
   reason: MediaUnavailableIssueReason;
   description?: string;
+  automaticRetry?: boolean;
 
   // The earliest the card should rebuild this target's media. Carried forward
   // across repeat reports of the same failure, and refreshed when a rebuild
   // starts a new attempt.
   rebuildNotBefore: Date;
+  attempting?: boolean;
 }
 
 // The per-cause presentation (localization key + icon) and handling, shared by
@@ -156,8 +159,9 @@ export class MediaUnavailableIssue implements Issue {
     this._erroredTargets.set(context.targetID, {
       reason: context.reason,
       description: context.description,
+      automaticRetry: context.automaticRetry,
       rebuildNotBefore:
-        existing?.reason === context.reason
+        existing?.reason === context.reason && !existing.attempting
           ? existing.rebuildNotBefore
           : this._getRebuildDeadline(context.reason),
     });
@@ -230,7 +234,11 @@ export class MediaUnavailableIssue implements Issue {
         severity: 'high' as const,
       },
       body: {
-        text: localize('issues.media_unavailable.text'),
+        text: localize(
+          [...targets.values()].some((error) => error.automaticRetry !== false)
+            ? 'issues.media_unavailable.text'
+            : 'issues.media_unavailable.manual_retry',
+        ),
       },
       ...(targets.size && {
         metadata: Array.from(targets).map(([id, error]) =>
@@ -274,22 +282,25 @@ export class MediaUnavailableIssue implements Issue {
   // =========================================================================
 
   public needsRetry(): boolean {
-    return this.hasIssue();
+    return [...this._getDisplayedErrors().values()].some(
+      (error) => error.automaticRetry !== false,
+    );
   }
 
   // False while everything on screen is still within its grace period, so the
   // manager treats the moment as one where nothing was attempted rather than as
   // a failed attempt that should lengthen the wait for the next one.
   public canRetryNow(): boolean {
-    return [...this._getDisplayedErrors().values()].some((error) =>
-      this._isRebuildDue(error),
+    return [...this._getDisplayedErrors().values()].some(
+      (error) => error.automaticRetry !== false && this._isRebuildDue(error),
     );
   }
 
   public retry(force?: boolean): boolean {
     const retryTargets = new Map(
       [...this._getDisplayedErrors()].filter(
-        ([, error]) => force || this._isRebuildDue(error),
+        ([, error]) =>
+          force || (error.automaticRetry !== false && this._isRebuildDue(error)),
       ),
     );
     if (!retryTargets.size) {
@@ -305,7 +316,10 @@ export class MediaUnavailableIssue implements Issue {
     }
 
     for (const error of retryTargets.values()) {
-      error.rebuildNotBefore = this._getRebuildDeadline(error.reason);
+      // Keep the old failure visible while allowing the replacement to load.
+      // A failure from that replacement resets this hold in trigger().
+      error.attempting = true;
+      error.rebuildNotBefore = this._getRebuildDeadline('not_loading');
     }
 
     // Intentionally keep _erroredTargets in place. The issue stays visible

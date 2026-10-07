@@ -1,5 +1,5 @@
 import type { ViewContext } from 'view';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 
 import type { CardController } from '../../../src/card-controller/controller';
@@ -29,6 +29,35 @@ const createInitializedCardAPI = (initialized?: boolean): CardController => {
 };
 
 describe('should act correctly when view is set', () => {
+  it('keeps the newest seek when identical-camera queries complete out of order', async () => {
+    const factory = mock<ViewFactory>();
+    factory.getViewDefault.mockImplementation(() =>
+      createView({ view: 'media', camera: 'camera' }),
+    );
+    const executor = mock<ViewQueryExecutor>();
+    const deferred: { release?: (modifiers: ViewModifier[]) => void } = {};
+    const delayed = new Promise<ViewModifier[]>((resolve) => {
+      deferred.release = resolve;
+    });
+    const oldTime = new Date('2026-10-02T12:35:00Z');
+    const newTime = new Date('2026-10-02T16:10:00Z');
+    executor.getNewQueryModifiers
+      .mockImplementationOnce(async () => await delayed)
+      .mockResolvedValueOnce([
+        new MergeContextViewModifier({ mediaViewer: { seek: newTime } }),
+      ]);
+    const manager = new ViewManager(createInitializedCardAPI(), {
+      viewFactory: factory,
+      viewQueryExecutor: executor,
+    });
+    const first = manager.setViewDefaultWithNewQuery();
+    await manager.setViewDefaultWithNewQuery();
+    expect(manager.getView()?.context?.mediaViewer?.seek).toEqual(newTime);
+    assert(deferred.release);
+    deferred.release([new MergeContextViewModifier({ mediaViewer: { seek: oldTime } })]);
+    await first;
+    expect(manager.getView()?.context?.mediaViewer?.seek).toEqual(newTime);
+  });
   it('should set basic view', () => {
     const view = createView({
       view: 'live',
