@@ -14,6 +14,8 @@ describe('ViewMedia', () => {
       cameraID: 'camera',
     });
     expect(media.getCameraID()).toBe('camera');
+    expect(media.getRecordingPlaybackOptions()).toBeNull();
+    expect(media.requiresExactTimeSelection()).toBe(false);
     expect(media.getMediaType()).toBe('clip');
     expect(media.getID()).toBeNull();
     expect(media.getStartTime()).toBeNull();

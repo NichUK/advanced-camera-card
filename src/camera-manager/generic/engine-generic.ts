@@ -10,6 +10,7 @@ import type { ViewMedia } from '../../view/item';
 import type { ViewItemCapabilities } from '../../view/types';
 import { Camera } from '../camera';
 import type { CameraManagerEngine } from '../engine';
+import type { RecordingQueryPolicy } from '../recording-policy';
 import type { CameraManagerReadOnlyConfigStore } from '../store';
 import {
   Engine,
@@ -51,6 +52,10 @@ export class GenericCameraManagerEngine implements CameraManagerEngine {
     this._hassManager = hassManager;
     this._entityRegistryManager = entityRegistryManager;
     this._eventCallback = eventCallback;
+  }
+
+  public getRecordingQueryPolicy(_camera: Camera): RecordingQueryPolicy | null {
+    return null;
   }
 
   public getEngineType(): Engine {

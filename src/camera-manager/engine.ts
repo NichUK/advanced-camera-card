@@ -4,6 +4,7 @@ import type { Endpoint } from '../types';
 import type { ViewMedia } from '../view/item';
 import type { ViewItemCapabilities } from '../view/types';
 import type { Camera } from './camera';
+import type { RecordingQueryPolicy } from './recording-policy';
 import type { CameraManagerReadOnlyConfigStore } from './store';
 import type {
   CameraManagerCameraMetadata,
@@ -33,6 +34,8 @@ export const CAMERA_MANAGER_ENGINE_EVENT_LIMIT_DEFAULT = 10000;
 
 export interface CameraManagerEngine {
   getEngineType(): Engine;
+
+  getRecordingQueryPolicy(camera: Camera): RecordingQueryPolicy | null;
 
   createCamera(cameraConfig: CameraConfig): Promise<Camera>;
 

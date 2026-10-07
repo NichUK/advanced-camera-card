@@ -101,9 +101,9 @@
         "rotation": "Rotation",
         "rotations": {
           "0": "None",
-          "90": "90° clockwise",
-          "180": "180° clockwise",
-          "270": "270° clockwise"
+          "90": "90\u00b0 clockwise",
+          "180": "180\u00b0 clockwise",
+          "270": "270\u00b0 clockwise"
         }
       },
       "engine": "Camera engine",
@@ -114,6 +114,7 @@
         "generic": "Generic",
         "motioneye": "MotionEye",
         "reolink": "Reolink",
+        "shinobi": "Shinobi recordings",
         "tplink": "TP-Link"
       },
       "frigate": {
@@ -828,6 +829,7 @@
     "call_unavailable_heading": "Two-way audio unavailable",
     "camera_initialization": "Camera initialization failed",
     "camera_initialization_reolink": "Could not initialize Reolink camera",
+    "camera_initialization_shinobi": "Could not initialize Shinobi recordings camera",
     "configuration_error": "Configuration error",
     "could_not_create_elements": "Could not create picture elements",
     "diagnostics": "Card diagnostics. Please review for confidential information prior to sharing",
@@ -872,7 +874,7 @@
     },
     "config_upgrade": {
       "heading": "Configuration upgrade available",
-      "text": "A configuration upgrade is available. To upgrade, edit this card (Dashboard pencil icon → Three-dot menu → Edit) and click the 'Automatic Upgrade' button in the card editor"
+      "text": "A configuration upgrade is available. To upgrade, edit this card (Dashboard pencil icon \u2192 Three-dot menu \u2192 Edit) and click the 'Automatic Upgrade' button in the card editor"
     },
     "config_upgrade_failure": {
       "heading": "Configuration could not be fully upgraded",
@@ -906,6 +908,7 @@
     },
     "media_unavailable": {
       "heading": "Media unavailable",
+      "manual_retry": "This recording cannot be played. Check the explanation below, then retry or choose another historical time.",
       "reasons": {
         "entity_unavailable": "Camera entity unavailable",
         "not_loading": "Media not loading",
@@ -967,7 +970,13 @@
     "where": "Where"
   },
   "media_viewer": {
-    "unseekable": "Seek time not found in media"
+    "unseekable": "Seek time not found in media",
+    "continuation_loading": "Finding the next recording\u2026",
+    "continuation_gap": "Recording gap. Playback stopped.",
+    "continuation_end": "End of available recording history.",
+    "continuation_error": "Next recording unavailable. Choose a time to retry.",
+    "continue_next": "Continue at next recording",
+    "cancel_continuation": "Cancel continuation"
   },
   "thumbnail": {
     "camera": "Camera",
@@ -983,6 +992,33 @@
     "where": "Where"
   },
   "timeline": {
-    "select_date": "Choose date"
+    "playback_position": "Playback position",
+    "axis_time": "Timeline timezone",
+    "recording_time": "Recording timezone",
+    "recording_gap": "No recording covers the selected time.",
+    "invalid_local_time": "Enter a valid date and time.",
+    "invalid_time_zone": "The recording timezone is invalid. Check the integration configuration.",
+    "nonexistent_local_time": "This local time does not exist because the clocks move forward. Choose another time.",
+    "select_offset": "This time occurs twice. Choose its UTC offset.",
+    "select_date": "Choose date",
+    "recording_coverage_loading": "Checking recording coverage...",
+    "recording_coverage_complete": "Recording coverage checked. Unshaded areas are gaps.",
+    "recording_coverage_error": "Recording coverage unavailable. Choose a time to retry.",
+    "viewport_previous": "Earlier",
+    "viewport_next": "Later",
+    "viewport_in": "Zoom in",
+    "viewport_out": "Zoom out"
+  },
+  "recordings": {
+    "errors": {
+      "authentication": "Recording authorization expired. Sign in to Home Assistant, then retry.",
+      "denied": "You do not have access to this recording camera. Check Home Assistant permissions.",
+      "unavailable": "Recording expired or deleted. Choose another historical time.",
+      "network": "Recording server unavailable. Retry the selected time.",
+      "metadata": "Recording information is invalid or incomplete. Check the integration, then retry.",
+      "timeout": "Recording request timed out. Retry the selected time.",
+      "unsupported": "This browser does not support the recording format. Try a compatible browser.",
+      "decode": "This recording could not be decoded. Try a compatible browser or another recording."
+    }
   }
 }
