@@ -15,6 +15,7 @@ const mount = async (
   mediaURL = createFixtureURL('shinobi-4k-h264.mp4'),
   browseGate?: (lower: number, upper: number) => Promise<void>,
   archiveRequests?: { lower: number; upper: number; elapsed: number }[],
+  width?: string,
 ) => {
   const start = new Date('2026-10-02T12:34:00Z');
   const end = new Date('2026-10-02T12:36:00Z');
@@ -102,11 +103,12 @@ const mount = async (
       type: 'custom:advanced-camera-card',
       cameras: [{ camera_entity: 'camera.archive', engine: 'shinobi' }],
       view: { default: 'timeline' },
+      ...(width ? { dimensions: { height: '624px' } } : {}),
       timeline: { show_recordings: true },
       media_viewer: { controls: { timeline: { mode: 'below', show_recordings: true } } },
     },
     hass,
-    { toleratedConsoleErrors: [RESIZE_LOOP_CONSOLE_ERROR] },
+    { width, toleratedConsoleErrors: [RESIZE_LOOP_CONSOLE_ERROR] },
   );
   await card.waitForSelector<HTMLElement>('.vis-panel.vis-center');
   return card;
@@ -180,6 +182,44 @@ const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement
 };
 
 const timings = { cold: [] as number[], warm: [] as number[] };
+it.each(['390px', '1664px'])(
+  'keeps recording time and date labels inside the card at %s in both timeline views',
+  async (width) => {
+    const card = await mount(undefined, undefined, undefined, width);
+    const checkLabels = async (): Promise<void> => {
+      await expect
+        .poll(() => {
+          const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+            card.card,
+            'advanced-camera-card-timeline-core',
+          ).find((element) => element.getBoundingClientRect().height > 0);
+          if (!core) return false;
+          const labels = deepQueryAll<HTMLElement>(core, '.vis-text:not(.vis-measure)');
+          const bounds = core.getBoundingClientRect();
+          const cardBounds = card.card.getBoundingClientRect();
+          return (
+            labels.some((label) => label.classList.contains('vis-minor')) &&
+            labels.some((label) => label.classList.contains('vis-major')) &&
+            labels.every((label) => {
+              const box = label.getBoundingClientRect();
+              return (
+                box.height > 0 &&
+                box.top >= bounds.top &&
+                box.bottom <= bounds.bottom + 1 &&
+                box.bottom <= cardBounds.bottom + 1
+              );
+            })
+          );
+        })
+        .toBe(true);
+    };
+    await checkLabels();
+    await choose(card, new Date('2026-10-02T12:35:00Z'));
+    await waitForSelectedFrame(card);
+    await checkLabels();
+  },
+);
+
 for (const mode of ['cold', 'warm'] as const) {
   if (mode === 'warm') {
     it('primes the exact warm media cache key before collecting measurements', async () => {

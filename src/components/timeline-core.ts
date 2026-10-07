@@ -197,12 +197,7 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
             ? 'mdi:play-box-lock'
             : 'mdi:camera-lock';
 
-    return html` <div
-      @advanced-camera-card:timeline:thumbnail-data-request=${this._controller
-        .handleThumbnailDataRequest}
-      class="timeline"
-      ${ref(this._refTimeline)}
-    >
+    return html`
       <div
         class=${this._controller.getDatePickerTimeZone() !== null
           ? 'timeline-tools zoned'
@@ -250,7 +245,13 @@ export class AdvancedCameraCardTimelineCore extends LitElement {
         >
         </advanced-camera-card-date-picker>
       </div>
-    </div>`;
+      <div
+        @advanced-camera-card:timeline:thumbnail-data-request=${this._controller
+          .handleThumbnailDataRequest}
+        class="timeline"
+        ${ref(this._refTimeline)}
+      ></div>
+    `;
   }
 
   /**
