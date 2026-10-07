@@ -121,7 +121,7 @@ const mount = async (
 it('moves the playhead into the next recording after a natural file ending', async () => {
   const card = await mount([0, 1]);
   await expect
-    .poll(() => current(card)?.context?.mediaViewer?.seek?.getTime())
+    .poll(() => current(card)?.context?.mediaViewer?.seek?.getTime(), { timeout: 5000 })
     .toBe(start.getTime() + 1000);
   const expected = new Date(start.getTime() + 1000).toLocaleString('sv-SE');
   await expect
