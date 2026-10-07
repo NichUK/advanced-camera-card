@@ -14,6 +14,7 @@ interface ResolvedMediaControllerOptions {
   cache?: ResolvedMediaCache | null;
   resolve?: (hass: HomeAssistant, contentID: string) => Promise<ResolvedMedia>;
   onError?: (error: unknown) => void;
+  transformError?: (error: unknown) => unknown;
 }
 
 /**
@@ -59,7 +60,8 @@ export class ResolvedMediaController implements ReactiveController {
   }
 
   public async hostUpdate(): Promise<void> {
-    const { hass, contentID, cache, resolve, onError } = this._getOptionsCallback();
+    const { hass, contentID, cache, resolve, onError, transformError } =
+      this._getOptionsCallback();
 
     if (!hass || !contentID) {
       // Invalidate any in-flight request so a stale result cannot repopulate
@@ -106,8 +108,8 @@ export class ResolvedMediaController implements ReactiveController {
         resolved = await resolve(hass, contentID);
       } catch (error) {
         if (this._requestGeneration.isCurrent(requestID)) {
-          this._error = error;
-          onError?.(error);
+          this._error = transformError ? transformError(error) : error;
+          onError?.(this._error);
           this._host.requestUpdate();
         }
         return;

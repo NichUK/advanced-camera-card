@@ -38,7 +38,7 @@ import { canonicalizeHAURL } from '../../ha/canonical-url.js';
 import { isHARelativeURL } from '../../ha/is-ha-relative-url.js';
 import type { ResolvedMediaCache } from '../../ha/resolved-media.js';
 import type { HomeAssistant } from '../../ha/types.js';
-import { RecordingPlaybackError } from '../../view/recording-playback.js';
+import { recordingPlaybackError } from '../../view/recording-playback.js';
 
 import '../../patches/ha-hls-player.js';
 
@@ -134,14 +134,16 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
     cache: this.resolvedMediaCache,
     ...(this.media?.getRecordingPlaybackOptions() && {
       resolve: this.media?.getRecordingPlaybackOptions()?.resolveMedia,
+      transformError: (error: unknown) => recordingPlaybackError(error, 'resolve'),
       onError: (error: unknown) => {
         const targetID = this.media?.getID();
-        if (targetID && error instanceof RecordingPlaybackError) {
+        if (targetID) {
+          const failure = recordingPlaybackError(error, 'resolve');
           triggerMediaUnavailableIssue(this, {
             targetID,
             reason: 'server_error',
-            description: error.message,
-            automaticRetry: error.retryable,
+            description: failure.message,
+            automaticRetry: failure.retryable,
           });
         }
       },
@@ -330,8 +332,10 @@ export class AdvancedCameraCardViewerProvider extends LitElement implements Medi
       return renderNotificationBlockFromText(archiveFailure);
     }
     const resolutionError = this._resolvedMediaController.getError();
-    if (resolutionError instanceof RecordingPlaybackError) {
-      return renderNotificationBlockFromText(resolutionError.message);
+    if (resolutionError && this.media?.getRecordingPlaybackOptions()) {
+      return renderNotificationBlockFromText(
+        recordingPlaybackError(resolutionError, 'resolve').message,
+      );
     }
     const error = this._signedURLController.getError();
     if (error) {

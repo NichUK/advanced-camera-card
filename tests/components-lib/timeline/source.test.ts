@@ -624,6 +624,13 @@ describe('TimelineDataSource', () => {
         start: new Date(-300000),
         end: new Date(1500000),
       });
+      // A persisted viewport from an unbounded engine must obey the new engine's limit.
+      expect(
+        source.getPrefetchWindow({ start: new Date(0), end: new Date(86400000) }),
+      ).toEqual({
+        start: new Date(43200000 - 900000),
+        end: new Date(43200000 + 900000),
+      });
     });
     it('keeps Shinobi and mixed-camera prefetch within 26 hours without day rounding', async () => {
       const cameraManager = createTestCameraManager();

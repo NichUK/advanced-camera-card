@@ -30,7 +30,10 @@ import {
   dispatchMediaVolumeChangeEvent,
 } from '../utils/media-info';
 import type { RecordingPlaybackOptions } from '../view/recording-playback';
-import { RecordingPlaybackError } from '../view/recording-playback.js';
+import {
+  RecordingPlaybackError,
+  recordingPlaybackError,
+} from '../view/recording-playback.js';
 
 @customElement('advanced-camera-card-video-player')
 export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPlayer {
@@ -53,12 +56,15 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
     if (!this.archive || !this.targetID) {
       return;
     }
+    this._reportArchiveError(this._nativeRecordingPlaybackError());
+  }
+
+  private _nativeRecordingPlaybackError(): RecordingPlaybackError {
     const code = this._refVideo.value?.error?.code;
-    const error = new RecordingPlaybackError(
+    return new RecordingPlaybackError(
       code === 3 ? 'decode' : code === 2 ? 'network' : 'unsupported',
       'playback',
     );
-    this._reportArchiveError(error);
   }
 
   private _reportArchiveError(error: RecordingPlaybackError): void {
@@ -85,21 +91,21 @@ export class AdvancedCameraCardVideoPlayer extends LitElement implements MediaPl
       return;
     }
     const abort = new AbortController();
-    let error = new RecordingPlaybackError('unsupported', 'playback');
+    let error: RecordingPlaybackError | null = null;
     try {
       await withTimeout(
         preflight(url, abort, 'playback'),
         10000,
         new RecordingPlaybackError('timeout', 'playback'),
       );
+      // Healthy transport does not change the browser's decode/network diagnosis.
+      error = this._nativeRecordingPlaybackError();
     } catch (failure) {
-      if (failure instanceof RecordingPlaybackError) {
-        error = failure;
-      }
+      error = recordingPlaybackError(failure, 'playback');
     } finally {
       abort.abort();
     }
-    if (this.isConnected && this.url === url && this.targetID === targetID) {
+    if (error && this.isConnected && this.url === url && this.targetID === targetID) {
       this._reportArchiveError(error);
     }
   }

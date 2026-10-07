@@ -267,14 +267,19 @@ export class TimelineDataSource {
 
   public getPrefetchWindow(window: TimelineWindow): TimelineWindow {
     const maximumSeconds = this.getMaximumQueryWindowSeconds();
-    const width = window.end.getTime() - window.start.getTime();
+    const requestedWidth = window.end.getTime() - window.start.getTime();
+    const width =
+      maximumSeconds !== null
+        ? Math.min(requestedWidth, maximumSeconds * 1000)
+        : requestedWidth;
+    const center = (window.start.getTime() + window.end.getTime()) / 2;
     const padding =
       maximumSeconds !== null
         ? Math.max(0, Math.min(width, (maximumSeconds * 1000 - width) / 2))
         : width;
     return {
-      start: new Date(window.start.getTime() - padding),
-      end: new Date(window.end.getTime() + padding),
+      start: new Date(center - width / 2 - padding),
+      end: new Date(center + width / 2 + padding),
     };
   }
 

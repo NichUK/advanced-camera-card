@@ -126,6 +126,76 @@ const mount = async (url: string, retrySeconds = 0.1) => {
   return { card, began, resolves: () => resolves };
 };
 
+it.each([new Error('SECRET transport detail'), undefined])(
+  'renders a redacted failure for an untyped resolver rejection (%s)',
+  async (failure) => {
+    const options = new ShinobiRecording(
+      'camera.archive',
+      contentID,
+      'test',
+      start,
+      new Date(start.getTime() + 120000),
+    ).getRecordingPlaybackOptions();
+    const resolveMedia = vi.fn().mockRejectedValue(failure);
+    const override = vi
+      .spyOn(ShinobiRecording.prototype, 'getRecordingPlaybackOptions')
+      .mockReturnValue({ ...options, resolveMedia });
+    try {
+      const { card } = await mount(createFixtureURL('shinobi-4k-h264.mp4'), 0);
+      const issue = await card.events.waitForFirst('advanced-camera-card:issue:trigger');
+      expect(issue.detail).toMatchObject({
+        reason: 'server_error',
+        automaticRetry: false,
+      });
+      await expect
+        .poll(() => getBlockNotificationText(card.card))
+        .toContain('Recording information is invalid');
+      expect(getBlockNotificationText(card.card)).not.toContain('SECRET');
+      expect(deepQuery(card.card, 'advanced-camera-card-progress-indicator')).toBeNull();
+    } finally {
+      override.mockRestore();
+    }
+  },
+);
+
+it('preserves a native network failure when the source diagnostic preflight succeeds', async () => {
+  const player = document.createElement('advanced-camera-card-video-player');
+  const options = new ShinobiRecording(
+    'camera.archive',
+    contentID,
+    'test',
+    start,
+    new Date(start.getTime() + 120000),
+  ).getRecordingPlaybackOptions();
+  const preflight = vi.fn().mockResolvedValue(undefined);
+  player.archive = true;
+  player.targetID = 'archive';
+  player.url = createFixtureURL('shinobi-4k-h264.mp4');
+  player.playbackOptions = { ...options, preflight };
+  const issues = vi.fn();
+  player.addEventListener('advanced-camera-card:issue:trigger', issues);
+  document.body.append(player);
+  try {
+    await player.updateComplete;
+    const video = player.shadowRoot?.querySelector('video');
+    const source = video?.querySelector('source');
+    assert(video && source);
+    Object.defineProperty(video, 'error', { value: { code: 2 }, configurable: true });
+    video.dispatchEvent(new Event('error'));
+    source.dispatchEvent(new Event('error'));
+    await expect.poll(() => preflight.mock.calls.length).toBe(1);
+    await expect.poll(() => issues.mock.calls.length).toBe(2);
+    for (const [event] of issues.mock.calls) {
+      expect(event.detail).toMatchObject({
+        reason: 'server_error',
+        automaticRetry: true,
+      });
+    }
+  } finally {
+    player.remove();
+  }
+});
+
 it('keeps monitoring a loaded player after same-content metadata revalidation', async () => {
   const playback: { callback: ((live: boolean) => void) | null } = { callback: null };
   const subscription = vi

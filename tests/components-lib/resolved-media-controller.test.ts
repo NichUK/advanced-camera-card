@@ -22,6 +22,25 @@ const createResolvedMedia = (url = 'http://media'): ResolvedMedia => ({
 });
 
 describe('ResolvedMediaController', () => {
+  it('normalizes even an undefined rejection before storing and reporting it', async () => {
+    const failure = new Error('safe failure');
+    const onError = vi.fn();
+    const transformError = vi.fn(() => failure);
+    const controller = new ResolvedMediaController(
+      mock<ReactiveControllerHost>(),
+      () => ({
+        hass: createHASS(),
+        contentID: CONTENT_ID,
+        resolve: vi.fn().mockRejectedValue(undefined),
+        transformError,
+        onError,
+      }),
+    );
+    await controller.hostUpdate();
+    expect(transformError).toHaveBeenCalledWith(undefined);
+    expect(controller.getError()).toBe(failure);
+    expect(onError).toHaveBeenCalledWith(failure);
+  });
   it('uses an uncached scoped resolver and reports current failures only', async () => {
     const host = mock<ReactiveControllerHost>();
     const hass = createHASS();
