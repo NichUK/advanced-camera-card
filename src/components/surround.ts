@@ -7,6 +7,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import type { CameraManager } from '../camera-manager/manager.js';
 import type { FoldersManager } from '../card-controller/folders/manager.js';
@@ -18,14 +19,18 @@ import type { MiniTimelineControlConfig } from '../config/schema/common/controls
 import type { CardWideConfig } from '../config/schema/types.js';
 import type { HomeAssistant } from '../ha/types.js';
 import basicBlockStyle from '../scss/basic-block.scss?inline';
+import type { MediaPlaybackTimeUpdate } from '../types';
 import { contentsChanged } from '../utils/basic.js';
 import { fireAdvancedCameraCardEvent } from '../utils/fire-advanced-camera-card-event.js';
 
 import './surround-basic.js';
 import './thumbnail-carousel';
 
+import type { AdvancedCameraCardTimelineCore } from './timeline-core';
+
 @customElement('advanced-camera-card-surround')
 export class AdvancedCameraCardSurround extends LitElement {
+  private _refTimeline: Ref<AdvancedCameraCardTimelineCore> = createRef();
   @property({ attribute: false })
   public hass?: HomeAssistant;
 
@@ -93,6 +98,9 @@ export class AdvancedCameraCardSurround extends LitElement {
 
     return html` <advanced-camera-card-surround-basic
       .locked=${this.locked}
+      @advanced-camera-card:media:time-update=${(
+        event: CustomEvent<MediaPlaybackTimeUpdate>,
+      ) => this._refTimeline.value?.handlePlaybackTimeUpdate?.(event.detail)}
       @advanced-camera-card:thumbnails-carousel:media-select=${(ev: CustomEvent) =>
         changeDrawer(ev, 'close')}
     >
@@ -114,6 +122,7 @@ export class AdvancedCameraCardSurround extends LitElement {
         : ''}
       ${this.timelineConfig && this.timelineConfig.mode !== 'none'
         ? html` <advanced-camera-card-timeline-core
+            ${ref(this._refTimeline)}
             slot=${this.timelineConfig.mode}
             .hass=${this.hass}
             .viewManagerEpoch=${this.viewManagerEpoch}

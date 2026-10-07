@@ -118,6 +118,32 @@ const mount = async (
   return card;
 };
 
+it('moves the playhead into the next recording after a natural file ending', async () => {
+  const card = await mount([0, 1]);
+  await expect
+    .poll(() => current(card)?.context?.mediaViewer?.seek?.getTime(), { timeout: 5000 })
+    .toBe(start.getTime() + 1000);
+  const expected = new Date(start.getTime() + 1000).toLocaleString('sv-SE');
+  await expect
+    .poll(() => deepQuery<HTMLElement>(card.card, '.playback_bar')?.textContent)
+    .toBe(expected);
+  await expect
+    .poll(() => video(card)?.currentSrc.includes('v1-' + '1'.padStart(64, '0')))
+    .toBe(true);
+  await expect.poll(() => video(card)?.readyState).toBeGreaterThanOrEqual(3);
+  const next = video(card);
+  assert(next);
+  next.pause();
+  next.currentTime = 0.2;
+  await expect.poll(() => next.seeking).toBe(false);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const marker = deepQuery<HTMLElement>(card.card, '.playback_bar');
+  assert(marker);
+  const earlier = marker.getBoundingClientRect().left;
+  next.currentTime = 0.7;
+  await expect.poll(() => marker.getBoundingClientRect().left).toBeGreaterThan(earlier);
+});
+
 it('plays twenty natural adjacent-file handoffs once without skipping chronology', async ({
   task,
 }) => {

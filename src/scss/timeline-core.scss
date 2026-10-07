@@ -197,6 +197,31 @@ div.vis-tooltip {
   // Prevent the mouse interacting with the custom time.
   pointer-events: none;
 }
+
+.playback_bar {
+  background-color: var(--error-color, #db4437);
+  width: 3px;
+  z-index: 25;
+  // This is an observation, not a draggable seek control.
+  pointer-events: none;
+}
+
+.playback_bar .vis-custom-time-marker {
+  background-color: #a32620;
+  color: #fff;
+  font-size: 12px;
+}
+
+:host([playback-bar-marker-direction='right']) .playback_bar .vis-custom-time-marker {
+  left: 3px;
+}
+:host([playback-bar-marker-direction='left']) .playback_bar .vis-custom-time-marker {
+  right: 3px;
+}
+:host([playback-bar-marker-direction='center']) .playback_bar .vis-custom-time-marker {
+  left: 0px;
+  transform: translateX(-50%);
+}
 .target_bar .vis-custom-time-marker {
   background-color: var(--advanced-camera-card-timeline-background);
   color: var(--advanced-camera-card-timeline-text-color);

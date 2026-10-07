@@ -182,6 +182,78 @@ const waitForSelectedFrame = async (card: MountedCard): Promise<HTMLVideoElement
 };
 
 const timings = { cold: [] as number[], warm: [] as number[] };
+it('tolerates playback events before the lazy timeline method is available', async () => {
+  const card = await mount();
+  await choose(card, new Date('2026-10-02T12:35:00Z'));
+  const video = await waitForSelectedFrame(card);
+  video.pause();
+  const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+    card.card,
+    'advanced-camera-card-timeline-core',
+  ).find((element) => element.getBoundingClientRect().height > 0);
+  assert(core);
+  // Model the ref's element existing before its custom-element upgrade.
+  Object.defineProperty(core, 'handlePlaybackTimeUpdate', {
+    value: undefined,
+    configurable: true,
+  });
+  try {
+    video.dispatchEvent(new Event('timeupdate'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } finally {
+    Reflect.deleteProperty(core, 'handlePlaybackTimeUpdate');
+  }
+  video.currentTime = 40;
+  await expect
+    .poll(() => deepQuery<HTMLElement>(core, '.playback_bar')?.textContent)
+    .toBe(new Date('2026-10-02T12:34:40Z').toLocaleString('sv-SE'));
+});
+
+it('shows the native playback position, advances it, retains it paused, and follows native seeking', async () => {
+  const card = await mount();
+  await choose(card, new Date('2026-10-02T12:35:00Z'));
+  const video = await waitForSelectedFrame(card);
+  const playhead = await card.waitForSelector<HTMLElement>('.playback_bar');
+  const first = playhead.getBoundingClientRect().left;
+  await expect.poll(() => playhead.getBoundingClientRect().left).toBeGreaterThan(first);
+  video.currentTime = 80;
+  await expect.poll(() => playhead.getBoundingClientRect().left).toBeGreaterThan(first);
+  video.pause();
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+  const paused = playhead.getBoundingClientRect().left;
+  await new Promise<void>((resolve) => setTimeout(resolve, 300));
+  expect(playhead.getBoundingClientRect().left).toBe(paused);
+  video.currentTime = 20;
+  await expect.poll(() => playhead.getBoundingClientRect().left).toBeLessThan(paused);
+  expect(playhead.textContent).not.toBe('');
+  expect(getComputedStyle(playhead).pointerEvents).toBe('none');
+  const core = deepQueryAll<AdvancedCameraCardTimelineCore>(
+    card.card,
+    'advanced-camera-card-timeline-core',
+  ).find((element) => element.getBoundingClientRect().height > 0);
+  assert(core);
+  for (const start of ['2026-10-02T12:34:19Z', '2026-10-02T12:32:21Z']) {
+    const lower = new Date(start);
+    core.viewManagerEpoch?.manager.setViewWithMergedContext({
+      timeline: {
+        window: { start: lower, end: new Date(lower.getTime() + 120000) },
+      },
+    });
+    await expect
+      .poll(() => {
+        const marker = playhead.querySelector<HTMLElement>('.vis-custom-time-marker');
+        if (!marker) {
+          return false;
+        }
+        const box = marker.getBoundingClientRect(),
+          bounds = core.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right;
+      })
+      .toBe(true);
+  }
+  await choose(card, new Date('2026-10-02T15:00:00Z'));
+  await expect.poll(() => deepQuery(card.card, '.playback_bar')).toBeNull();
+});
 it.each(['390px', '1664px'])(
   'keeps recording time and date labels inside the card at %s in both timeline views',
   async (width) => {

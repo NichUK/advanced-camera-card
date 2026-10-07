@@ -167,6 +167,113 @@ const createEventMedia = (options?: { id?: string }): TestViewMedia =>
     endTime: add(WINDOW.start, { minutes: 31 }),
   });
 
+describe('recording playback position', () => {
+  const recording = () =>
+    new TestViewMedia({
+      mediaType: ViewMediaType.Recording,
+      cameraID: CAMERA_ID,
+      id: 'recording',
+      startTime: WINDOW.start,
+      endTime: WINDOW.end,
+    });
+  const mountPlayback = async (media = recording(), mini = true) => {
+    const harness = await createHarness({ media: [media], mini });
+    const view = harness.manager.getView();
+    assert(view);
+    view.view = 'media';
+    return { ...harness, view };
+  };
+
+  it('adds and advances a distinct playhead without changing navigation or selection', async () => {
+    const h = await mountPlayback();
+    h.controller.handlePlaybackTimeUpdate({ mediaID: 'recording', seconds: 10 });
+    expect(h.timeline.addCustomTime).toHaveBeenCalledWith(
+      add(WINDOW.start, { seconds: 10 }),
+      'playback_bar',
+    );
+    h.controller.handlePlaybackTimeUpdate({ mediaID: 'recording', seconds: 20 });
+    expect(h.timeline.setCustomTime).toHaveBeenCalledWith(
+      add(WINDOW.start, { seconds: 20 }),
+      'playback_bar',
+    );
+    expect(h.timeline.setCustomTimeTitle).toHaveBeenCalledWith(
+      expect.stringContaining('Playback position'),
+      'playback_bar',
+    );
+    expect(h.manager.setViewWithMergedContext).not.toHaveBeenCalled();
+    expect(h.timeline.setWindow).not.toHaveBeenCalled();
+    h.trigger('mouseUp');
+    expect(h.timeline.removeCustomTime).not.toHaveBeenCalledWith('playback_bar');
+  });
+
+  it.each(['gallery', 'gap', 'loading', 'no-view'])(
+    'removes the previous playhead on %s instead of showing a stale clip position',
+    async (state) => {
+      const h = await mountPlayback();
+      h.controller.handlePlaybackTimeUpdate({ mediaID: 'recording', seconds: 10 });
+      if (state === 'gallery') {
+        h.view.view = 'recordings';
+      }
+      if (state === 'gap') {
+        h.view.queryResults = null;
+      }
+      if (state === 'loading') {
+        h.view.context = { loading: { query: true } };
+      }
+      if (state === 'no-view') {
+        vi.mocked(h.manager.getView).mockReturnValue(null);
+      }
+      await h.controller.setView(mock<ViewManagerEpoch>({ manager: h.manager }));
+      expect(h.timeline.removeCustomTime).toHaveBeenCalledWith('playback_bar');
+    },
+  );
+
+  it('recreates the observed position when the canvas is rebuilt', async () => {
+    const h = await mountPlayback();
+    h.timeline.setCustomTimeMarker = undefined;
+    h.controller.destroyTimeline();
+    h.controller.handlePlaybackTimeUpdate({ mediaID: 'recording', seconds: 12 });
+    h.controller.setTimelineElement(document.createElement('div'));
+    expect(h.timeline.addCustomTime).toHaveBeenCalledWith(
+      add(WINDOW.start, { seconds: 12 }),
+      'playback_bar',
+    );
+  });
+
+  it.each([
+    { mediaID: null, seconds: 10 },
+    { mediaID: 'neighbour', seconds: 10 },
+    { mediaID: 'recording', seconds: -1 },
+    { mediaID: 'recording', seconds: NaN },
+    { mediaID: 'recording', seconds: Infinity },
+    { mediaID: 'recording', seconds: Number.MAX_VALUE },
+  ])('ignores unrelated or invalid native positions %j', async (update) => {
+    const h = await mountPlayback();
+    h.controller.handlePlaybackTimeUpdate(update);
+    expect(h.timeline.addCustomTime).not.toHaveBeenCalled();
+  });
+
+  it.each(['full', 'live', 'no-view', 'no-start', 'no-selection'])(
+    'does not invent a playback position for %s',
+    async (state) => {
+      const media =
+        state === 'no-start' ? new TestViewMedia({ id: 'recording' }) : recording();
+      const h = await mountPlayback(media, state !== 'full');
+      if (state === 'live') {
+        h.view.view = 'live';
+      }
+      if (state === 'no-view') {
+        vi.mocked(h.manager.getView).mockReturnValue(null);
+      }
+      if (state === 'no-selection') {
+        h.view.queryResults = null;
+      }
+      h.controller.handlePlaybackTimeUpdate({ mediaID: 'recording', seconds: 10 });
+      expect(h.timeline.addCustomTime).not.toHaveBeenCalled();
+    },
+  );
+});
+
 const createReviewMedia = (options?: {
   id?: string;
   startTime?: Date;

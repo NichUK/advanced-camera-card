@@ -14,6 +14,13 @@ You can interact with the timeline in a number of ways:
 - Clicking on the "background", or a camera title, will take you to the recordings for that camera (seeking to the clicked time).
 - Clicking on the time axis will take you to recordings for all cameras (seeking to the clicked time).
 
+When viewing a Shinobi recording with a mini-timeline, a red playhead and
+timestamp show the current playback position. It follows playback, native
+seeking and adjacent-file transitions, and stays at the current position when
+paused. It is separate from the navigation target and does not move the timeline
+window automatically. Selecting a different clip or a gap clears the old
+position until the selected player reports its time.
+
 | Option                 | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `clustering_threshold` | `3`     | The minimum number of overlapping events to allow prior to clustering/grouping them. Higher numbers cause clustering to happen less frequently. Depending on the timescale/zoom of the timeline, the underlying timeline library may still allow overlaps for low values of this parameter -- for a fully "flat" timeline use the `ribbon` style. `0` disables clustering entirely. Only used in the `stack` style of timeline. |
